@@ -1,0 +1,26 @@
+STANDARD OPERATING PROCEDURE: PUMP MAINTENANCE AND ISOLATION
+SOP ID: SOP-017
+EFFECTIVE DATE: 2024-01-15
+CLASSIFICATION: CONFIDENTIAL
+PLANT LOCATION: MRPL REFINERY UNIT 2
+
+SECTION 1: SCOPE AND PURPOSE
+This procedure defines standard maintenance protocols, vibration thresholds, isolation criteria, and safety checks for all centrifugal pumps across MRPL refinery process lines.
+
+SECTION 2: VIBRATION THRESHOLDS FOR CENTRIFUGAL PUMPS (e.g., P-204, P-205, P-206)
+- Normal Operating Range: 0.0 mm/s to 4.5 mm/s. Continuous operation permitted without intervention.
+- Warning Threshold: 4.5 mm/s to 7.1 mm/s. Schedule routine inspection within 48 hours. Monitor bearing temperature closely.
+- Critical Threshold: > 7.1 mm/s. Immediate action required. Isolate feed line and schedule emergency mechanical inspection.
+
+SECTION 3: ISOLATION AND SHUTDOWN PROTOCOL (HITL REQUIREMENT)
+- Shutdown of primary feed line pumps (including P-204) impacts Unit 2 throughput.
+- MANDATORY: Mechanical isolation or pump shutdown MUST be authorized via Human-In-The-Loop (HITL) engineer approval.
+- Step 1: Verify sensor readings and cross-check historical vibration trend.
+- Step 2: Obtain engineer digital confirmation via AegisAI Workbench.
+- Step 3: Close suction valve V-101 and discharge valve V-102. Lockout/Tagout (LOTO) applied.
+- Step 4: Perform mechanical inspection of bearing assembly, coupling alignment, and impeller wear.
+- Step 5: Replace or repair bearing assembly based on physical findings.
+
+SECTION 4: COMPLIANCE & SAFETY CONSTRAINTS
+- Maximum budget allocation for routine pump overhaul: Rs 75,000.
+- All operational decisions must be logged to the sovereign audit database.

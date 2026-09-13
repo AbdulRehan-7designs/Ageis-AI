@@ -1,0 +1,22 @@
+TECHNICAL MANUAL & SPECIFICATIONS: CENTRIFUGAL PUMP P-204
+EQUIPMENT TAG: P-204
+SYSTEM: PROCESS LINE A FEED PUMP
+MANUFACTURER: FLOWSERVE CORP
+CLASSIFICATION: INTERNAL TECHNICAL DOCUMENT
+
+1. TECHNICAL SPECIFICATIONS
+- Rated Flow Rate: 450 m³/h
+- Design Pressure: 24.5 bar
+- Operating Temperature: 70 °C - 85 °C (Alarm at 90 °C)
+- Motor Power: 110 kW, 2950 RPM
+- Bearing Type: Heavy Duty SKF 6314 Deep Groove Ball Bearing
+
+2. VIBRATION LIMITS & DIAGNOSIS
+- 0 - 4.5 mm/s: Acceptable condition.
+- 4.5 - 7.1 mm/s: Elevated vibration. Likely causes: imbalance, slight coupling misalignment, loose foundation bolts.
+- > 7.1 mm/s: Critical vibration limit. High risk of bearing race degradation, shaft deflection, or catastrophic mechanical seal failure.
+
+3. MAINTENANCE HISTORY SUMMARY
+- 12 Mar 2025: Scheduled overhaul. Replaced mechanical seal and bearing alignment verified.
+- 10 Nov 2024: Minor coupling pad replacement. Vibration returned to 2.1 mm/s.
+- 14 Jul 2024: Routine lube oil replacement and vibration baseline check.
