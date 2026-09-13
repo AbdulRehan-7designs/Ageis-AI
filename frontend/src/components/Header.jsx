@@ -1,35 +1,59 @@
 import React from 'react';
-import { ShieldCheck, ShieldAlert, Cpu, Lock } from 'lucide-react';
+import {
+  ShieldCheck,
+  Search,
+  Bell,
+  Sun,
+  User,
+  ChevronDown
+} from 'lucide-react';
 
 export default function Header({ systemHealth }) {
-  const egressStatus = systemHealth?.egress_monitor?.sovereign_status || 'AIR_GAPPED_ENFORCED';
-
   return (
     <header className="header">
       <div className="brand">
-        <div className="brand-logo">
-          <ShieldCheck size={20} />
-        </div>
+        <div className="brand-logo">A</div>
         <div className="brand-text">
-          <h1>AegisAI Workbench</h1>
-          <span>Sovereign Industrial Workbench (SIH 2026)</span>
+          <h1>Ageis AI</h1>
+          <span>Sovereign Agentic AI Workbench</span>
         </div>
       </div>
 
-      <div className="header-badges">
-        <div className="status-badge" style={{ borderColor: 'rgba(0, 242, 254, 0.3)' }}>
-          <Lock size={12} color="#00f2fe" />
-          <span>Classification: INTERNAL / CONFIDENTIAL</span>
+      <div className="search-bar-container">
+        <Search size={16} className="search-icon" />
+        <input
+          type="text"
+          placeholder='Ask anything... (e.g., "Diagnose P-204 vibration issue")'
+          className="header-search-input"
+        />
+        <span className="kbd-badge">Ctrl + K</span>
+      </div>
+
+      <div className="header-actions">
+        <div className="sovereign-badge">
+          <ShieldCheck size={16} color="#10b981" />
+          <div className="sovereign-info">
+            <span className="sovereign-title">Sovereign Mode</span>
+            <span className="sovereign-sub">No external API calls</span>
+          </div>
         </div>
 
-        <div className="status-badge">
-          <div className="status-indicator"></div>
-          <span>{egressStatus}</span>
-        </div>
+        <button className="icon-btn notification-btn">
+          <Bell size={18} />
+          <span className="notification-dot">3</span>
+        </button>
 
-        <div className="status-badge">
-          <Cpu size={12} color="#10b981" />
-          <span>Local GPU Active (RTX 3050)</span>
+        <button className="icon-btn">
+          <Sun size={18} />
+        </button>
+
+        <div className="user-profile">
+          <div className="avatar">RJ</div>
+          <div className="user-info">
+            <span className="user-name">Rehan</span>
+            <span className="user-role">Maintenance Engineer</span>
+          </div>
+          <ChevronDown size={14} color="#64748b" />
         </div>
       </div>
     </header>

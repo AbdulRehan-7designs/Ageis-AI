@@ -1,56 +1,147 @@
 import React from 'react';
-import { Cpu, Eye, Code, Database, FileText } from 'lucide-react';
+import {
+  Wrench,
+  FileCheck,
+  Compass,
+  Cpu,
+  Layers,
+  Database,
+  Hammer,
+  Wrench as ToolIcon,
+  Shield,
+  FileText,
+  Lock,
+  ChevronDown,
+  ChevronRight,
+  Activity
+} from 'lucide-react';
 
 export default function Sidebar({ activeModel, setActiveModel }) {
-  const models = [
-    { id: 'qwen2.5:7b', name: 'Qwen2.5 7B', type: 'General Reasoning', icon: Cpu, active: true },
-    { id: 'qwen2-vl:7b', name: 'Qwen2-VL 7B', type: 'Vision & P&ID Parsing', icon: Eye },
-    { id: 'qwen2.5-coder:7b', name: 'Qwen2.5 Coder', type: 'Scripting & Code', icon: Code },
-  ];
-
   return (
     <aside className="sidebar">
-      <div className="sidebar-section">
-        <h3>Model Auto-Router</h3>
-        {models.map((m) => {
-          const IconComponent = m.icon;
-          const isSelected = activeModel === m.id;
-          return (
-            <div
-              key={m.id}
-              className={`model-card ${isSelected ? 'active' : ''}`}
-              onClick={() => setActiveModel(m.id)}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '0.85rem' }}>
-                  <IconComponent size={14} color={isSelected ? '#00f2fe' : '#94a3b8'} />
-                  <span>{m.name}</span>
-                </div>
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>{m.type}</div>
-              </div>
-              <div style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
-                7B INT4
-              </div>
+      {/* Workspaces Section */}
+      <div className="sidebar-group">
+        <div className="sidebar-group-header">
+          <span>Workspaces</span>
+          <ChevronDown size={14} />
+        </div>
+
+        <nav className="nav-list">
+          <div className="nav-item active">
+            <Wrench size={18} />
+            <div className="nav-text">
+              <span className="nav-title">Maintenance Intelligence</span>
+              <span className="nav-sub">Diagnose • Plan • Execute</span>
             </div>
-          );
-        })}
+          </div>
+
+          <div className="nav-item">
+            <FileCheck size={18} />
+            <div className="nav-text">
+              <span className="nav-title">SOP Assistant</span>
+              <span className="nav-sub">Find and follow procedures</span>
+            </div>
+          </div>
+
+          <div className="nav-item">
+            <Compass size={18} />
+            <div className="nav-text">
+              <span className="nav-title">Engineering Knowledge</span>
+              <span className="nav-sub">P&IDs • Manuals • Drawings</span>
+            </div>
+          </div>
+
+          <div className="nav-item">
+            <Cpu size={18} />
+            <div className="nav-text">
+              <span className="nav-title">Custom Agent</span>
+              <span className="nav-sub">Create your own agent</span>
+            </div>
+          </div>
+        </nav>
       </div>
 
-      <div className="sidebar-section">
-        <h3>Local Data Stores</h3>
-        <div className="model-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem' }}>
-            <Database size={14} color="#10b981" />
-            <span>Qdrant Vector DB</span>
-          </div>
-          <span style={{ fontSize: '0.7rem', color: '#10b981', fontFamily: 'monospace' }}>ONLINE</span>
+      <div className="sidebar-divider" />
+
+      {/* Tools & Modules Nav */}
+      <nav className="nav-list secondary-nav">
+        <div className="nav-item-simple">
+          <Layers size={18} />
+          <span>Model Hub</span>
         </div>
-        <div className="model-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem' }}>
-            <FileText size={14} color="#3b82f6" />
-            <span>ChromaDB Hybrid</span>
+
+        <div className="nav-item-simple">
+          <Database size={18} />
+          <span>Knowledge Hub</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+
+        <div className="nav-item-simple">
+          <Hammer size={18} />
+          <span>Agent Builder</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+
+        <div className="nav-item-simple">
+          <ToolIcon size={18} />
+          <span>Tool Hub</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+
+        <div className="nav-item-simple">
+          <Shield size={18} />
+          <span>Governance</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+
+        <div className="nav-item-simple">
+          <FileText size={18} />
+          <span>Audit & Logs</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+
+        <div className="nav-item-simple">
+          <Lock size={18} />
+          <span>Sovereignty Center</span>
+          <ChevronRight size={14} className="nav-arrow" />
+        </div>
+      </nav>
+
+      <div className="sidebar-divider" />
+
+      {/* Recent Agents */}
+      <div className="sidebar-group">
+        <div className="sidebar-group-header">
+          <span>Recent Agents</span>
+        </div>
+        <div className="recent-agent-list">
+          <div className="recent-agent-item active">
+            <div className="agent-icon-badge">M</div>
+            <span>Maintenance Intelligence</span>
+            <span className="active-dot-text">Active</span>
           </div>
-          <span style={{ fontSize: '0.7rem', color: '#3b82f6', fontFamily: 'monospace' }}>READY</span>
+
+          <div className="recent-agent-item">
+            <div className="agent-icon-badge idle">S</div>
+            <span>SOP Assistant</span>
+            <span className="idle-text">Idle</span>
+          </div>
+
+          <div className="recent-agent-item">
+            <div className="agent-icon-badge idle">P</div>
+            <span>P&ID Analyzer</span>
+            <span className="idle-text">Idle</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="sidebar-footer">
+        <div className="system-health-card">
+          <Activity size={16} color="#10b981" />
+          <div>
+            <div className="health-title">System Health</div>
+            <div className="health-sub">All systems operational</div>
+          </div>
         </div>
       </div>
     </aside>

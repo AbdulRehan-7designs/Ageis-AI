@@ -2,19 +2,14 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
-import EgressMonitor from './components/EgressMonitor';
-import HitlPanel from './components/HitlPanel';
+import RightDrawer from './components/RightDrawer';
 import { fetchHealthStatus } from './services/api';
 
 export default function App() {
-  const [activeModel, setActiveModel] = useState('qwen2.5:7b');
+  const [activeModel, setActiveModel] = useState('Llama 3.1 8B');
   const [systemHealth, setSystemHealth] = useState(null);
-  const [pendingActions] = useState([
-    {
-      title: 'CONFIDENTIAL Document Export',
-      description: 'Requesting permission to compile turbine_safety_report.docx inheriting CONFIDENTIAL source tag.'
-    }
-  ]);
+  const [currentResponse, setCurrentResponse] = useState(null);
+  const [activeTab, setActiveTab] = useState('context');
 
   useEffect(() => {
     fetchHealthStatus().then((data) => {
@@ -27,11 +22,15 @@ export default function App() {
       <Header systemHealth={systemHealth} />
       <div className="workbench-layout">
         <Sidebar activeModel={activeModel} setActiveModel={setActiveModel} />
-        <ChatWindow activeModel={activeModel} />
-        <aside className="widgets-sidebar">
-          <EgressMonitor />
-          <HitlPanel pendingActions={pendingActions} />
-        </aside>
+        <ChatWindow
+          activeModel={activeModel}
+          onNewResponse={(resp) => setCurrentResponse(resp)}
+        />
+        <RightDrawer
+          response={currentResponse}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
       </div>
     </div>
   );
