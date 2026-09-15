@@ -81,6 +81,7 @@ services:
       - FASTEMBED_CACHE_PATH=/root/.cache/fastembed
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - QDRANT_COLLECTION=industrial_docs
       - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       postgres:

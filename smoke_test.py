@@ -12,62 +12,68 @@ from app.services.ingestion import ingestion_service
 from app.services.retrieval import retrieval_service
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PUBLIC_PDF = os.path.join(BASE_DIR, "test_data", "sample_public.pdf")
-RESTRICTED_PDF = os.path.join(BASE_DIR, "test_data", "sample_restricted.pdf")
 
-print("=== 1. INGESTING TEST FIXTURES ===")
-pub_stats = ingestion_service.ingest_pdf(
-    pdf_path=PUBLIC_PDF,
-    doc_name="Public Standard Operating Procedure",
-    classification_tag="PUBLIC",
-)
-print(f"Public Doc Ingestion: {pub_stats['total_chunks']} chunks upserted.")
+FIXTURES = [
+    ("sample_public.pdf", "Public SOP Directive", "PUBLIC"),
+    ("sample_internal.pdf", "Internal Operations Manual", "INTERNAL"),
+    ("sample_restricted.pdf", "Restricted Defense Directive", "RESTRICTED"),
+    ("sample_secret.pdf", "Secret Sovereign Protocol", "SECRET"),
+]
 
-res_stats = ingestion_service.ingest_pdf(
-    pdf_path=RESTRICTED_PDF,
-    doc_name="Restricted Defense Directive",
-    classification_tag="RESTRICTED",
-)
-print(f"Restricted Doc Ingestion: {res_stats['total_chunks']} chunks upserted.")
+print("=== 1. INGESTING 4-TIER CLEARANCE FIXTURES ===")
+for filename, doc_name, tag in FIXTURES:
+    pdf_path = os.path.join(BASE_DIR, "test_data", filename)
+    stats = ingestion_service.ingest_pdf(
+        pdf_path=pdf_path,
+        doc_name=doc_name,
+        classification_tag=tag,
+    )
+    print(f"Ingested [{tag}] '{doc_name}': {stats['total_chunks']} chunks upserted.")
 
-print("\n=== 2. TESTING PUBLIC CLEARANCE RETRIEVAL (Must Exclude RESTRICTED Docs) ===")
-public_query = "tactical defense clearance guidelines"
-public_results = retrieval_service.retrieve(
-    query=public_query,
-    user_clearance=["PUBLIC"],
-    top_k=5,
-)
+query = "defense clearance guidelines and operational workflow"
 
-print(f"Query: '{public_query}' | User Clearance: ['PUBLIC']")
-print(f"Results Count: {len(public_results)}")
-for r in public_results:
-    print(f" - [{r.classification_tag}] {r.doc_name} (Page {r.page}): {r.text[:100]}")
-
-# Strict assertion: No RESTRICTED doc should leak into a PUBLIC query
-restricted_leaks = [r for r in public_results if r.classification_tag == "RESTRICTED"]
-if restricted_leaks:
-    print(f"[FAIL] SECURITY FAILURE: {len(restricted_leaks)} restricted document(s) leaked to PUBLIC user!")
-    sys.exit(1)
+# Tier 1: PUBLIC clearance user
+print("\n=== 2. TESTING PUBLIC CLEARANCE RETRIEVAL ===")
+pub_res = retrieval_service.retrieve(query=query, user_clearance=["PUBLIC"], top_k=10)
+pub_tags = {r.classification_tag for r in pub_res}
+print(f"PUBLIC User Results Count: {len(pub_res)} | Tags returned: {pub_tags}")
+if pub_tags.issubset({"PUBLIC"}):
+    print("[PASS] PUBLIC CLEARANCE PASSED: Only PUBLIC documents retrieved.")
 else:
-    print("[PASS] SECURITY PASSED: 0 Restricted documents leaked to PUBLIC user.")
-
-print("\n=== 3. TESTING RESTRICTED CLEARANCE RETRIEVAL (Must Include RESTRICTED Docs) ===")
-authorized_results = retrieval_service.retrieve(
-    query=public_query,
-    user_clearance=["PUBLIC", "INTERNAL", "RESTRICTED"],
-    top_k=5,
-)
-
-print(f"Query: '{public_query}' | User Clearance: ['PUBLIC', 'INTERNAL', 'RESTRICTED']")
-print(f"Results Count: {len(authorized_results)}")
-for r in authorized_results:
-    print(f" - [{r.classification_tag}] {r.doc_name} (Page {r.page}): {r.text[:100]}")
-
-found_restricted = any(r.classification_tag == "RESTRICTED" for r in authorized_results)
-if found_restricted:
-    print("[PASS] AUTHORIZED RETRIEVAL PASSED: Restricted document successfully retrieved for authorized user.")
-else:
-    print("[FAIL] RETRIEVAL FAILURE: Authorized user failed to retrieve restricted document.")
+    print(f"[FAIL] SECURITY VIOLATION: Unauthorized tags {pub_tags - {'PUBLIC'}} leaked to PUBLIC user!")
     sys.exit(1)
 
-print("\nALL RAG RBAC SMOKE TESTS PASSED CLEANLY!")
+# Tier 2: INTERNAL clearance user
+print("\n=== 3. TESTING INTERNAL CLEARANCE RETRIEVAL ===")
+int_res = retrieval_service.retrieve(query=query, user_clearance=["PUBLIC", "INTERNAL"], top_k=10)
+int_tags = {r.classification_tag for r in int_res}
+print(f"INTERNAL User Results Count: {len(int_res)} | Tags returned: {int_tags}")
+if int_tags.issubset({"PUBLIC", "INTERNAL"}):
+    print("[PASS] INTERNAL CLEARANCE PASSED: Only PUBLIC & INTERNAL documents retrieved.")
+else:
+    print(f"[FAIL] SECURITY VIOLATION: Unauthorized tags {int_tags - {'PUBLIC', 'INTERNAL'}} leaked to INTERNAL user!")
+    sys.exit(1)
+
+# Tier 3: RESTRICTED clearance user
+print("\n=== 4. TESTING RESTRICTED CLEARANCE RETRIEVAL ===")
+res_res = retrieval_service.retrieve(query=query, user_clearance=["PUBLIC", "INTERNAL", "RESTRICTED"], top_k=10)
+res_tags = {r.classification_tag for r in res_res}
+print(f"RESTRICTED User Results Count: {len(res_res)} | Tags returned: {res_tags}")
+if res_tags.issubset({"PUBLIC", "INTERNAL", "RESTRICTED"}):
+    print("[PASS] RESTRICTED CLEARANCE PASSED: Only PUBLIC, INTERNAL, & RESTRICTED documents retrieved.")
+else:
+    print(f"[FAIL] SECURITY VIOLATION: Unauthorized tags {res_tags - {'PUBLIC', 'INTERNAL', 'RESTRICTED'}} leaked to RESTRICTED user!")
+    sys.exit(1)
+
+# Tier 4: SECRET clearance user
+print("\n=== 5. TESTING SECRET CLEARANCE RETRIEVAL ===")
+sec_res = retrieval_service.retrieve(query=query, user_clearance=["PUBLIC", "INTERNAL", "RESTRICTED", "SECRET"], top_k=10)
+sec_tags = {r.classification_tag for r in sec_res}
+print(f"SECRET User Results Count: {len(sec_res)} | Tags returned: {sec_tags}")
+if "SECRET" in sec_tags and len(sec_tags) == 4:
+    print("[PASS] SECRET CLEARANCE PASSED: All 4 clearance tiers accessible to SECRET user.")
+else:
+    print(f"[FAIL] RETRIEVAL FAILURE: SECRET user missing expected documents! Tags found: {sec_tags}")
+    sys.exit(1)
+
+print("\n🎉 ALL 4-TIER RAG RBAC CLEARANCE TESTS PASSED CLEANLY!")
