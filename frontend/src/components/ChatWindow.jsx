@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Wrench,
   ChevronDown,
@@ -13,13 +13,17 @@ import {
   ThumbsUp,
   ThumbsDown,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Loader2
 } from 'lucide-react';
-import { sendChatMessage } from '../services/api';
+import { sendChatMessage, uploadDocument } from '../services/api';
 
 export default function ChatWindow({ activeModel, onNewResponse }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   const [messages, setMessages] = useState([
     {
       role: 'user',
@@ -60,6 +64,55 @@ export default function ChatWindow({ activeModel, onNewResponse }) {
       ]
     }
   ]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'user',
+        content: `📎 Uploading document: ${file.name}`
+      }
+    ]);
+
+    try {
+      const res = await uploadDocument(file, 'INTERNAL');
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          reply_title: 'Document Ingestion Complete',
+          diagnosis_summary: `Successfully ingested "${res.filename}" into the Hybrid RAG engine. Indexed ${res.chunks_indexed} chunks with dual-vector embeddings (Dense + BM25). Tagged as ${res.classification_tag}.`,
+          recommended_action: {
+            title: 'Document Ready for Querying',
+            sop: 'Sovereign Knowledge Base Indexed',
+            requires_approval: false,
+            steps: ['Ask any question regarding this document in the chat bar below.'],
+            why_reasoning: [res.message]
+          },
+          citations: [
+            { document: res.filename, page: `Page 1+ (${res.chunks_indexed} chunks)`, tag: res.classification_tag, type: 'pdf' }
+          ]
+        }
+      ]);
+    } catch (err) {
+      console.error('File upload error:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          reply_title: 'Ingestion Error',
+          diagnosis_summary: `Failed to ingest document "${file.name}": ${err.response?.data?.detail || err.message}`
+        }
+      ]);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -308,23 +361,36 @@ export default function ChatWindow({ activeModel, onNewResponse }) {
 
       {/* Input Box Bottom */}
       <form className="chat-input-container" onSubmit={handleSend}>
-        <button type="button" className="attach-btn">
-          <Paperclip size={18} />
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept=".pdf"
+          style={{ display: 'none' }}
+        />
+        <button
+          type="button"
+          className="attach-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          title="Upload PDF document to RAG Knowledge Base"
+        >
+          {uploading ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
         </button>
         <input
           type="text"
           className="main-prompt-input"
-          placeholder="Ask a follow-up question..."
+          placeholder="Ask a follow-up question or upload a PDF document..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
         <div className="input-right-controls">
           <div className="small-model-chip">
-            <span>Llama 3.1 8B</span>
+            <span>{activeModel || 'Qwen 2.5 7B'}</span>
             <ChevronDown size={12} />
           </div>
           <button type="submit" className="send-btn-round" disabled={loading}>
-            <Send size={16} />
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>
       </form>

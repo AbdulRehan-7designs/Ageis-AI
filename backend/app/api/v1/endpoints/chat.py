@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from app.services.agent_orchestrator import agent_orchestrator
+from app.core.auth import User, get_current_user
 
 router = APIRouter()
 
@@ -58,9 +59,13 @@ class ChatResponse(BaseModel):
     risk_score: float
 
 @router.post("/chat", response_model=ChatResponse)
-async def process_chat(request: ChatRequest):
+async def process_chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+):
     result = await agent_orchestrator.process_query(
         user_message=request.message,
-        model_override=request.model_override
+        model_override=request.model_override,
+        user_clearance=current_user.clearance_tags,
     )
     return ChatResponse(**result)

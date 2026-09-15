@@ -27,4 +27,25 @@ export const sendChatMessage = async (payload) => {
   }
 };
 
+export const uploadDocument = async (file, classificationTag = 'INTERNAL') => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await API.post(
+      `/document/upload?classification_tag=${encodeURIComponent(classificationTag)}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Failed to upload document:', error);
+    throw error;
+  }
+};
+
 export default API;
