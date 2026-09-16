@@ -204,6 +204,7 @@ class RetrievalService:
                 {
                     "document": result.doc_name,
                     "page": result.page,
+                    "section_title": result.section_title or "General",
                     "tag": result.classification_tag,
                     "snippet": result.text[:500],
                 }

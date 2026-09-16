@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from app.services.agent_orchestrator import agent_orchestrator
+from app.services.audit_service import audit_service
 from app.core.auth import User, get_current_user
 
 router = APIRouter()
@@ -19,6 +20,7 @@ class ChatRequest(BaseModel):
 class Citation(BaseModel):
     document: str
     page: int
+    section_title: Optional[str] = "General"
     tag: str
     snippet: str
 
@@ -27,6 +29,7 @@ class ReasoningStep(BaseModel):
     title: str
     description: str
     status: str
+    timestamp: Optional[str] = None
 
 class EquipmentDetail(BaseModel):
     tag: str
@@ -67,5 +70,29 @@ async def process_chat(
         user_message=request.message,
         model_override=request.model_override,
         user_clearance=current_user.clearance_tags,
+        username=current_user.username,
     )
     return ChatResponse(**result)
+
+
+class FeedbackRequest(BaseModel):
+    message_id: Optional[str] = None
+    rating: str  # "thumbs_up" | "thumbs_down"
+    comments: Optional[str] = None
+    query: Optional[str] = None
+
+
+@router.post("/chat/feedback")
+async def record_feedback(
+    request: FeedbackRequest,
+    current_user: User = Depends(get_current_user),
+):
+    audit_service.log_event(
+        event_type="USER_FEEDBACK",
+        username=current_user.username,
+        clearance_tags=current_user.clearance_tags,
+        query_or_action=f"Feedback: {request.rating} | {request.comments or 'No comments'}",
+        details={"rating": request.rating, "comments": request.comments, "query": request.query},
+    )
+    return {"status": "success", "message": "Feedback recorded in cryptographic audit ledger"}
+

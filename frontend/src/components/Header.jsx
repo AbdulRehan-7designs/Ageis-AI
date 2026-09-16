@@ -8,7 +8,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 
-export default function Header({ systemHealth }) {
+export default function Header({ systemHealth, currentUser, onSelectRole }) {
   return (
     <header className="header">
       <div className="brand">
@@ -47,13 +47,37 @@ export default function Header({ systemHealth }) {
           <Sun size={18} />
         </button>
 
-        <div className="user-profile">
-          <div className="avatar">RJ</div>
-          <div className="user-info">
-            <span className="user-name">Rehan</span>
-            <span className="user-role">Maintenance Engineer</span>
+        <div className="user-profile" style={{ gap: '8px' }}>
+          <div className="avatar">
+            {currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : 'US'}
           </div>
-          <ChevronDown size={14} color="#64748b" />
+          <div className="user-info">
+            <span className="user-name">{currentUser?.username || 'Operator'}</span>
+            <span className="user-role" style={{ fontSize: '11px', color: '#10b981', fontWeight: '600' }}>
+              {currentUser?.role || 'ENGINEER'} [{(currentUser?.clearance_tags || ['INTERNAL']).join(', ')}]
+            </span>
+          </div>
+          {onSelectRole && (
+            <select
+              value={currentUser?.role || 'ENGINEER'}
+              onChange={(e) => onSelectRole(e.target.value)}
+              style={{
+                background: '#1e293b',
+                color: '#94a3b8',
+                border: '1px solid #334155',
+                borderRadius: '4px',
+                padding: '2px 4px',
+                fontSize: '11px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="ADMIN">ADMIN (All Tiers)</option>
+              <option value="ENGINEER">ENGINEER (Conf/Rest/Int/Pub)</option>
+              <option value="OPERATOR">OPERATOR (Rest/Int/Pub)</option>
+              <option value="AUDITOR">AUDITOR (Int/Pub)</option>
+              <option value="PUBLIC">PUBLIC (Public Only)</option>
+            </select>
+          )}
         </div>
       </div>
     </header>

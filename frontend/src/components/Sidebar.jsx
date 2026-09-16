@@ -16,7 +16,7 @@ import {
   Activity
 } from 'lucide-react';
 
-export default function Sidebar({ activeModel, setActiveModel }) {
+export default function Sidebar({ activeModel, setActiveModel, onOpenAudit, onOpenSandbox, onOpenKnowledgeHub }) {
   return (
     <aside className="sidebar">
       {/* Workspaces Section */}
@@ -65,42 +65,42 @@ export default function Sidebar({ activeModel, setActiveModel }) {
 
       {/* Tools & Modules Nav */}
       <nav className="nav-list secondary-nav">
-        <div className="nav-item-simple">
+        <div className="nav-item-simple clickable" onClick={() => alert('Model Hub: Select LLM models (Qwen 2.5 7B / DeepSeek R1 14B / Qwen2-VL) in the chat window top banner.')}>
           <Layers size={18} />
           <span>Model Hub</span>
         </div>
 
-        <div className="nav-item-simple">
-          <Database size={18} />
-          <span>Knowledge Hub</span>
+        <div className="nav-item-simple clickable" onClick={onOpenKnowledgeHub}>
+          <Database size={18} color="#3b82f6" />
+          <span style={{ fontWeight: '600', color: '#3b82f6' }}>Knowledge Hub</span>
           <ChevronRight size={14} className="nav-arrow" />
         </div>
 
-        <div className="nav-item-simple">
+        <div className="nav-item-simple clickable" onClick={() => alert('Agent Builder: LangGraph multi-agent flow builder is active in air-gapped pipeline mode.')}>
           <Hammer size={18} />
           <span>Agent Builder</span>
           <ChevronRight size={14} className="nav-arrow" />
         </div>
 
-        <div className="nav-item-simple">
-          <ToolIcon size={18} />
-          <span>Tool Hub</span>
+        <div className="nav-item-simple clickable" onClick={onOpenSandbox}>
+          <ToolIcon size={18} color="#00f2fe" />
+          <span style={{ fontWeight: '600', color: '#00f2fe' }}>Code Sandbox</span>
           <ChevronRight size={14} className="nav-arrow" />
         </div>
 
-        <div className="nav-item-simple">
-          <Shield size={18} />
-          <span>Governance</span>
+        <div className="nav-item-simple clickable" onClick={onOpenAudit}>
+          <Shield size={18} color="#10b981" />
+          <span style={{ fontWeight: '600', color: '#10b981' }}>Governance & Hashes</span>
           <ChevronRight size={14} className="nav-arrow" />
         </div>
 
-        <div className="nav-item-simple">
+        <div className="nav-item-simple clickable" onClick={onOpenAudit}>
           <FileText size={18} />
           <span>Audit & Logs</span>
           <ChevronRight size={14} className="nav-arrow" />
         </div>
 
-        <div className="nav-item-simple">
+        <div className="nav-item-simple clickable" onClick={onOpenAudit}>
           <Lock size={18} />
           <span>Sovereignty Center</span>
           <ChevronRight size={14} className="nav-arrow" />
