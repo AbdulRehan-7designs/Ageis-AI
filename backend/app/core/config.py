@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     
     # Ollama Local LLM
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    DEFAULT_CHAT_MODEL: str = "qwen2.5:7b"
+    DEFAULT_CHAT_MODEL: str = "qwen2.5:3b"
     DEFAULT_VISION_MODEL: str = "qwen2-vl:7b"
     DEFAULT_CODER_MODEL: str = "qwen2.5-coder:7b"
     

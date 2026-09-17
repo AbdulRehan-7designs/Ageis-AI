@@ -155,8 +155,9 @@ class AgentOrchestrator:
                         logger.warning("Reasoning agent: Ollama returned empty response; using fallback")
                 else:
                     logger.warning(
-                        "Reasoning agent: Ollama returned HTTP %d; using fallback",
+                        "Reasoning agent: Ollama returned HTTP %d; using fallback. Body: %s",
                         ollama_resp.status_code,
+                        ollama_resp.text,
                     )
         except httpx.ConnectError:
             logger.warning("Reasoning agent: Ollama not reachable at %s; using fallback", settings.OLLAMA_BASE_URL)
