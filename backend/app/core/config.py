@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AegisAI Sovereign Workbench"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
+    ALLOW_DEVELOPMENT_IDENTITY_FALLBACK: bool = True
     LOG_LEVEL: str = "INFO"
     SECRET_KEY: str = "change-this-in-production-super-secret-sovereign-key"
     
@@ -30,9 +31,13 @@ class Settings(BaseSettings):
     
     # Ollama Local LLM
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    DEFAULT_CHAT_MODEL: str = "qwen2.5:3b"
-    DEFAULT_VISION_MODEL: str = "qwen2-vl:7b"
-    DEFAULT_CODER_MODEL: str = "qwen2.5-coder:7b"
+    AEGIS_MODEL_GENERAL: str = "qwen2.5:3b"
+    AEGIS_MODEL_CODING: str = "qwen2.5-coder:3b"
+    AEGIS_MODEL_VISION: str = ""
+    AEGIS_MODEL_EMBEDDINGS: str = "BAAI/bge-small-en-v1.5"
+    DEFAULT_CHAT_MODEL: str = AEGIS_MODEL_GENERAL
+    DEFAULT_VISION_MODEL: str = AEGIS_MODEL_VISION
+    DEFAULT_CODER_MODEL: str = AEGIS_MODEL_CODING
     
     # Final hybrid-RAG stack for the Aegis AI design.
     DENSE_EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
@@ -47,6 +52,16 @@ class Settings(BaseSettings):
     
     # Air-Gap / Sovereign Controls
     EGRESS_MONITOR_ENABLED: bool = True
+    EGRESS_ENFORCE: bool = True
+    EGRESS_ALLOW_HOSTS: str = ""
     CLASSIFICATION_TAG_DEFAULT: str = "INTERNAL"
+    SANDBOX_URL: str = ""
+    SANDBOX_TIMEOUT_SECONDS: float = 5.0
+    SANDBOX_MEMORY_MB: int = 256
+    SANDBOX_CPU_LIMIT: float = 0.5
+    SANDBOX_MAX_OUTPUT_BYTES: int = 65536
+    SANDBOX_MAX_INPUT_BYTES: int = 32768
+    SANDBOX_ALLOW_LOCAL_FALLBACK: bool = True
+    ARTIFACT_STORAGE_DIR: str = "artifacts"
 
 settings = Settings()

@@ -1,7 +1,15 @@
+"""Install the air-gap HTTP guard before any service creates an httpx client."""
+
+from app.services.egress_guard import install_httpx_hooks
+
+install_httpx_hooks()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
+from fastapi.staticfiles import StaticFiles
+
 from app.api.v1.router import api_router
+from app.core.config import settings
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,6 +27,9 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+app.mount("/files", StaticFiles(directory="uploaded_docs"), name="files")
+
+
 @app.get("/")
 async def root():
     return {
@@ -26,6 +37,7 @@ async def root():
         "status": "online",
         "docs": "/docs"
     }
+
 
 if __name__ == "__main__":
     import uvicorn

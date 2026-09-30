@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" role="img" aria-label="Aegis AI">
+<rect width="1280" height="320" fill="#0f1720"/>
+<g stroke="#2b3a49" stroke-width="1"><path d="M0 80H1280M0 160H1280M0 240H1280M320 0V320M640 0V320M960 0V320"/></g>
+<path d="M150 70 L230 95 V170 C230 215 195 245 150 262 C105 245 70 215 70 170 V95 Z" fill="#16212d" stroke="#ff922b" stroke-width="6"/>
+<path d="M112 165 l28 28 l52 -58" fill="none" stroke="#ff922b" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="290" y="150" font-family="Arial Narrow,Arial,sans-serif" font-size="84" font-weight="700" fill="#e6edf3">Aegis AI</text>
+<text x="292" y="200" font-family="Arial,sans-serif" font-size="30" fill="#93a4b5">Ask your engineering documents anything.</text>
+<text x="292" y="242" font-family="Arial,sans-serif" font-size="30" fill="#ff922b">Cited. Clearance-aware. 100% on-premise.</text>
+</svg>

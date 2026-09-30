@@ -1,25 +1,30 @@
 #!/bin/bash
 # =============================================================================
 # AegisAI — Ollama Entrypoint
-# Starts the Ollama server and pre-pulls all required models on first boot.
-# Subsequent boots skip the pull if the model is already cached in the volume.
+# Starts the Ollama server and pre-pulls catalog models on first boot.
+# Keep this list in sync with backend/app/core/model_catalog.json (enabled tags).
 # =============================================================================
 
 set -e
 
-# Models to pull on startup (order: text first, coder, vision last)
+# 3B defaults — do not pull 7B/VL here unless a later slice requires it.
 MODELS=(
-  "qwen2.5:7b"
-  "qwen2.5-coder:7b"
+  "qwen2.5:3b"
+  "qwen2.5-coder:3b"
 )
 
+model_present() {
+  local tag="$1"
+  ollama list 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -Fxq "$tag"
+}
+
 echo "[AegisAI] Starting Ollama server..."
+export OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0}"
 ollama serve &
 SERVER_PID=$!
 
-# Wait for Ollama to be healthy before pulling models
 echo "[AegisAI] Waiting for Ollama to become ready..."
-MAX_WAIT=60
+MAX_WAIT=90
 WAITED=0
 until ollama list > /dev/null 2>&1; do
   sleep 2
@@ -31,22 +36,22 @@ until ollama list > /dev/null 2>&1; do
 done
 echo "[AegisAI] Ollama is ready."
 
-# Pull each model only if not already present
 for MODEL in "${MODELS[@]}"; do
   echo "[AegisAI] Checking model: ${MODEL}..."
-  if ollama list 2>/dev/null | grep -q "^${MODEL%:*}"; then
+  if model_present "$MODEL"; then
     echo "[AegisAI] Model '${MODEL}' already present — skipping pull."
+  elif [ "${AEGIS_ALLOW_MODEL_DOWNLOADS:-false}" != "true" ]; then
+    echo "[AegisAI] Model '${MODEL}' is missing and downloads are disabled."
+    echo "[AegisAI] Provision it into the ollama_models volume before air-gapped startup."
   else
-    echo "[AegisAI] Pulling model '${MODEL}'... (this may take a while on first run)"
+    echo "[AegisAI] Pulling model '${MODEL}'... (first run may take several minutes)"
     if ollama pull "${MODEL}"; then
       echo "[AegisAI] Successfully pulled '${MODEL}'."
     else
-      echo "[AegisAI] WARNING: Failed to pull '${MODEL}'. System will use fallback engine."
+      echo "[AegisAI] WARNING: Failed to pull '${MODEL}'. Chat will use the deterministic fallback until this tag is available."
     fi
   fi
 done
 
-echo "[AegisAI] All model checks complete. Ollama is serving."
-
-# Keep the server process in foreground
+echo "[AegisAI] Catalog model checks complete. Ollama is serving."
 wait $SERVER_PID

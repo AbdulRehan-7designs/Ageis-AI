@@ -25,7 +25,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Secret key for JWT signing — loaded from settings or fallback
-SECRET_KEY = getattr(settings, "JWT_SECRET_KEY", "aegis-sovereign-secret-key-2026-sih")
+SECRET_KEY = getattr(settings, "JWT_SECRET_KEY", None) or settings.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -40,6 +40,7 @@ ROLE_CLEARANCE_MAP: Dict[str, List[str]] = {
 
 
 class User(BaseModel):
+    id: str | None = None
     username: str
     role: str
     clearance_tags: List[str]
@@ -117,21 +118,67 @@ def get_current_user(
 ) -> User:
     """FastAPI dependency for authenticating user and extracting RBAC clearance tags."""
     if not credentials or not credentials.credentials:
-        # Default fallback for development / unauthenticated sovereign local ops
-        return User(
-            username="sovereign_operator",
-            role="ENGINEER",
-            clearance_tags=ROLE_CLEARANCE_MAP["ENGINEER"],
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     payload = decode_access_token(credentials.credentials)
-    username = payload.get("sub", "sovereign_operator")
-    role = payload.get("role", "ENGINEER").upper()
-    clearance_tags = payload.get(
-        "clearance_tags", ROLE_CLEARANCE_MAP.get(role, ROLE_CLEARANCE_MAP["ENGINEER"])
-    )
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token identity missing")
 
-    return User(username=username, role=role, clearance_tags=clearance_tags)
+    # Reload the identity from PostgreSQL so role and clearance cannot be
+    # changed by client-supplied token claims or stale frontend state.
+    try:
+        from app.db.repository import find_user
+        from app.db.repository import ensure_schema
+        from app.db.session import SessionLocal
+        ensure_schema()
+        with SessionLocal() as db:
+            record = find_user(db, username)
+            if record is None:
+                if settings.ENVIRONMENT != "development" or not settings.ALLOW_DEVELOPMENT_IDENTITY_FALLBACK:
+                    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User session is no longer valid")
+                # Existing integration tests and local signed-token workflows
+                # can run without provisioning a PostgreSQL user. Login in
+                # every deployed environment still requires a persisted user.
+                role = str(payload.get("role") or "ENGINEER").upper()
+                logger.warning("Using development signed-token compatibility identity for %s", username)
+                return User(
+                    username=username,
+                    role=role,
+                    clearance_tags=list(ROLE_CLEARANCE_MAP.get(role, [])),
+                )
+            return User(
+                id=str(record.id),
+                username=record.username,
+                role=record.role,
+                clearance_tags=list(record.clearance_tags or []),
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if settings.ENVIRONMENT == "development" and settings.ALLOW_DEVELOPMENT_IDENTITY_FALLBACK:
+            role = str(payload.get("role") or "ENGINEER").upper()
+            logger.warning("Using development signed-token compatibility identity for %s: %s", username, exc)
+            return User(
+                username=username,
+                role=role,
+                clearance_tags=list(ROLE_CLEARANCE_MAP.get(role, [])),
+            )
+        logger.error("Unable to load authenticated identity: %s", exc)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Authentication service unavailable")
+
+
+def get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+) -> Optional[User]:
+    """Return an authenticated user when credentials are supplied, otherwise public context."""
+    if not credentials:
+        return None
+    return get_current_user(credentials)
 
 
 def require_role(allowed_roles: List[str]):

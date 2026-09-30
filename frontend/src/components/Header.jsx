@@ -1,84 +1,97 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  ShieldCheck,
-  Search,
-  Bell,
-  Sun,
-  User,
-  ChevronDown
+  Search, Bell, Shield, Sparkles, Activity, Settings, LogOut, ChevronDown, Lock
 } from 'lucide-react';
 
-export default function Header({ systemHealth, currentUser, onSelectRole }) {
+export default function Header({ systemHealth, currentUser, activeDashboard, setActiveDashboard, onLogout, onSearch }) {
+  const [searchVal, setSearchVal] = useState('');
+  const [showDashMenu, setShowDashMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   return (
-    <header className="header">
-      <div className="brand">
-        <div className="brand-logo">A</div>
-        <div className="brand-text">
-          <h1>Ageis AI</h1>
-          <span>Sovereign Agentic AI Workbench</span>
-        </div>
+    <header className="wb-header" style={{ padding: '0 32px', height: '64px', background: 'rgba(22, 17, 20, 0.95)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
+      
+      {/* Breadcrumbs / Tagline */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#5A5A5A', fontSize: '0.85rem', fontWeight: 500 }}>
+        <Sparkles size={16} />
+        <span>Secure</span>
+        <span style={{ color: 'rgba(255,255,255,0.1)' }}>|</span>
+        <span>Intelligent</span>
+        <span style={{ color: 'rgba(255,255,255,0.1)' }}>|</span>
+        <span>Engineering Focused</span>
       </div>
 
-      <div className="search-bar-container">
-        <Search size={16} className="search-icon" />
-        <input
-          type="text"
-          placeholder='Ask anything... (e.g., "Diagnose P-204 vibration issue")'
-          className="header-search-input"
-        />
-        <span className="kbd-badge">Ctrl + K</span>
-      </div>
-
-      <div className="header-actions">
-        <div className="sovereign-badge">
-          <ShieldCheck size={16} color="#10b981" />
-          <div className="sovereign-info">
-            <span className="sovereign-title">Sovereign Mode</span>
-            <span className="sovereign-sub">No external API calls</span>
-          </div>
+      {/* Right Side Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        
+        {/* Search */}
+        <div style={{ 
+          display: 'flex', alignItems: 'center', gap: '8px', 
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', 
+          borderRadius: '20px', padding: '6px 16px', width: '300px'
+        }}>
+          <Search size={14} color="#5A5A5A" />
+          <input
+            style={{ background: 'transparent', border: 'none', outline: 'none', color: '#F0F0F0', fontSize: '0.85rem', width: '100%', fontFamily: 'inherit' }}
+            placeholder="Search documents, equipment, P-204, tags..."
+            value={searchVal}
+            onChange={e => setSearchVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { onSearch?.(searchVal); setSearchVal(''); } }}
+          />
         </div>
 
-        <button className="icon-btn notification-btn">
+        {/* Icons */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'transparent', cursor: 'pointer', color: '#A8A8A8', transition: 'background 0.2s' }}
+             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
           <Bell size={18} />
-          <span className="notification-dot">3</span>
-        </button>
+          <div style={{ position: 'absolute', top: '8px', right: '10px', width: '6px', height: '6px', background: '#ef4444', borderRadius: '50%' }}></div>
+        </div>
 
-        <button className="icon-btn">
-          <Sun size={18} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'transparent', cursor: 'pointer', color: '#A8A8A8', transition: 'background 0.2s' }}
+             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <Shield size={18} />
+        </div>
 
-        <div className="user-profile" style={{ gap: '8px' }}>
-          <div className="avatar">
-            {currentUser?.username ? currentUser.username.substring(0, 2).toUpperCase() : 'US'}
+        {/* Dashboard Menu Toggle (Hidden behind icon for clean look) */}
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', background: 'transparent', cursor: 'pointer', color: '#A8A8A8', transition: 'background 0.2s' }}
+               onClick={() => setShowDashMenu(!showDashMenu)}
+               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
+            <Settings size={18} />
           </div>
-          <div className="user-info">
-            <span className="user-name">{currentUser?.username || 'Operator'}</span>
-            <span className="user-role" style={{ fontSize: '11px', color: '#10b981', fontWeight: '600' }}>
-              {currentUser?.role || 'ENGINEER'} [{(currentUser?.clearance_tags || ['INTERNAL']).join(', ')}]
-            </span>
-          </div>
-          {onSelectRole && (
-            <select
-              value={currentUser?.role || 'ENGINEER'}
-              onChange={(e) => onSelectRole(e.target.value)}
-              style={{
-                background: '#1e293b',
-                color: '#94a3b8',
-                border: '1px solid #334155',
-                borderRadius: '4px',
-                padding: '2px 4px',
-                fontSize: '11px',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="ADMIN">ADMIN (All Tiers)</option>
-              <option value="ENGINEER">ENGINEER (Conf/Rest/Int/Pub)</option>
-              <option value="OPERATOR">OPERATOR (Rest/Int/Pub)</option>
-              <option value="AUDITOR">AUDITOR (Int/Pub)</option>
-              <option value="PUBLIC">PUBLIC (Public Only)</option>
-            </select>
+
+          {showDashMenu && (
+            <div className="wb-dash-menu" onClick={e => e.stopPropagation()} style={{ right: 0, left: 'auto', top: '45px' }}>
+              <div style={{ padding: '8px 12px', fontSize: '0.7rem', color: '#5A5A5A', textTransform: 'uppercase', fontWeight: 700 }}>Switch Role</div>
+              {['maintenance', 'admin', 'security', 'analyst', 'operator'].map(d => (
+                <button
+                  key={d}
+                  className={`wb-dash-item${d === activeDashboard ? ' active' : ''}`}
+                  onClick={() => {
+                    setActiveDashboard(d);
+                    setShowDashMenu(false);
+                  }}
+                  style={{ textTransform: 'capitalize' }}
+                >
+                  <Activity size={14} />
+                  <span>{d} Console</span>
+                </button>
+              ))}
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '8px 0' }}></div>
+              <button className="wb-dash-item" onClick={onLogout} style={{ color: '#ef4444' }}>
+                <LogOut size={14} />
+                <span>Sign Out</span>
+              </button>
+            </div>
           )}
         </div>
+
       </div>
     </header>
   );

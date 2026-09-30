@@ -1,0 +1,8 @@
+*.pyc
+__pycache__
+.pytest_cache
+.venv
+venv
+uploaded_docs
+*.pdf
+.git

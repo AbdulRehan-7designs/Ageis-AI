@@ -1,0 +1,32 @@
+---
+description: SIH/MRPL problem alignment and 3B model policy for AegisAI
+alwaysApply: true
+---
+
+# AegisAI alignment
+
+Read `PROBLEM_STATEMENT.md` before changing architecture, models, or “sovereign” behavior.
+`HYBRID_RAG_DESIGN.md` is the RAG *target* spec — read the STATUS block at the top. Do not treat later sections as already implemented.
+
+This is an **air-gapped on-prem agentic workbench for confidential industrial work (MRPL / SIH)**, not a cloud chatbot.
+
+## Must preserve
+
+- Nothing leaves the premises. No cloud LLM APIs. No CDN/unpkg in production UI.
+- Backend is **not locked to one model**. Add models via `backend/app/core/model_catalog.json` + Ollama pull list. Do not hardcode tags in the orchestrator or React picker.
+- **Default models stay 3B:** `qwen2.5:3b` (chat/docs) and `qwen2.5-coder:3b` (code/calc). Do not add 7B/VL models unless the current slice truly cannot work without them.
+- Build **one production slice at a time** without breaking chat, RAG, upload, or citations.
+
+## Expected demo capabilities (do not fake them)
+
+Model auto-select across ≥2 task types; agentic E2E (scanned report → findings → Word); sandbox-verified coding; multimodal when a vision model is enabled; visible proof of zero egress.
+
+## Example
+
+```python
+# ❌ BAD — locked to one model
+model = "qwen2.5:7b"
+
+# ✅ GOOD — registry decides
+decision = model_registry.select(query, override=model_override)
+```

@@ -1,171 +1,147 @@
-"""Air-Gapped Sovereign Execution Sandbox for AegisAI.
-
-Provides isolated, secure execution of diagnostic scripts and industrial calculations.
-Features AST static analysis to block dangerous system/network calls, execution
-timeouts, memory/resource containment, and output capture.
-"""
+"""Controlled Python sandbox client with a development-only compatibility fallback."""
 
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import logging
+import os
+import subprocess
 import sys
 import tempfile
 import time
-import subprocess
-
-from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
+
+import httpx
+from pydantic import BaseModel, Field
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Blacklisted modules & AST node types for security policy
 BLOCKED_MODULES = {
     "os", "sys", "subprocess", "socket", "httpx", "requests", "urllib",
     "shutil", "ctypes", "multiprocessing", "threading", "pty", "posix",
-    "builtins", "importlib", "pickle", "eval", "exec", "tempfile"
+    "builtins", "importlib", "pickle", "eval", "exec", "tempfile",
 }
-
-BLOCKED_CALLS = {
-    "eval", "exec", "open", "__import__", "compile", "getattr", "setattr", "delattr"
-}
+BLOCKED_CALLS = {"eval", "exec", "open", "__import__", "compile", "getattr", "setattr", "delattr"}
 
 
 class SandboxExecutionRequest(BaseModel):
-    code: str
-    timeout_sec: Optional[float] = 5.0
+    code: str = Field(min_length=1, max_length=32768)
+    timeout_sec: Optional[float] = Field(default=None, gt=0, le=30)
     context_vars: Optional[Dict[str, Any]] = None
+    inputs: Optional[Dict[str, Any]] = None
+    purpose: str = Field(default="engineering_calculation", max_length=120)
 
 
 class SandboxExecutionResult(BaseModel):
-    status: str  # "SUCCESS", "SECURITY_VIOLATION", "TIMEOUT", "ERROR"
-    stdout: str
-    stderr: str
+    status: str
+    stdout: str = ""
+    stderr: str = ""
     result: Optional[Any] = None
-    execution_time_sec: float
-    violations: List[str]
+    execution_time_sec: float = 0.0
+    execution_time_ms: int = 0
+    violations: List[str] = []
+    sandbox_id: str = ""
+    network_enabled: bool = False
+    code_hash: str = ""
 
 
 class CodeSandbox:
-    """Secure, isolated Python execution sandbox for AegisAI tools."""
-
     def __init__(self, default_timeout: float = 5.0) -> None:
         self.default_timeout = default_timeout
 
     def static_security_inspect(self, code: str) -> List[str]:
-        """Perform AST static analysis to detect forbidden imports and calls."""
         violations: List[str] = []
-
         try:
             tree = ast.parse(code)
         except SyntaxError as exc:
-            violations.append(f"Syntax error in code snippet: {exc}")
-            return violations
-
+            return [f"Syntax error in code snippet: {exc}"]
         for node in ast.walk(tree):
-            # Check import statements (import os, import subprocess, etc.)
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    root_name = alias.name.split(".")[0]
-                    if root_name in BLOCKED_MODULES:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                names = node.names if isinstance(node, ast.Import) else [ast.alias(name=node.module or "")]
+                for alias in names:
+                    if alias.name.split(".")[0] in BLOCKED_MODULES:
                         violations.append(f"Forbidden module import: '{alias.name}'")
-
-            # Check import-from statements (from os import path, etc.)
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    root_name = node.module.split(".")[0]
-                    if root_name in BLOCKED_MODULES:
-                        violations.append(f"Forbidden module import from '{node.module}'")
-
-            # Check dangerous built-in function calls (eval, exec, __import__)
-            elif isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name):
-                    if node.func.id in BLOCKED_CALLS:
-                        violations.append(f"Forbidden function call: '{node.func.id}()'")
-
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in BLOCKED_CALLS:
+                violations.append(f"Forbidden function call: '{node.func.id}()'")
         return violations
 
-    def execute(self, code: str, timeout_sec: Optional[float] = None) -> SandboxExecutionResult:
-        """Execute code snippet in an isolated subprocess with AST inspection and timeout enforcement."""
-        start_time = time.time()
-        timeout = timeout_sec if timeout_sec is not None else self.default_timeout
-
-        # Step 1: Static Security Inspection
+    def execute(
+        self,
+        code: str,
+        timeout_sec: Optional[float] = None,
+        inputs: Optional[Dict[str, Any]] = None,
+        purpose: str = "engineering_calculation",
+    ) -> SandboxExecutionResult:
+        started = time.monotonic()
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+        sandbox_id = hashlib.sha256(f"{code_hash}:{started}".encode()).hexdigest()[:20]
+        if len(code.encode("utf-8")) > settings.SANDBOX_MAX_INPUT_BYTES:
+            return self._result("INPUT_REJECTED", sandbox_id, code_hash, started, violations=["Input exceeds sandbox limit."])
         violations = self.static_security_inspect(code)
         if violations:
-            logger.warning("Sandbox security violation blocked execution: %s", violations)
-            return SandboxExecutionResult(
-                status="SECURITY_VIOLATION",
-                stdout="",
-                stderr="Security Policy Violation: Code contained restricted operations.",
-                result=None,
-                execution_time_sec=round(time.time() - start_time, 4),
-                violations=violations,
-            )
+            return self._result("SECURITY_VIOLATION", sandbox_id, code_hash, started, stderr="Security policy violation.", violations=violations)
 
-        # Step 2: Isolated Subprocess Execution
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp_file:
-            script_path = tmp_file.name
-            tmp_file.write(code)
-
-        try:
-            cmd = [sys.executable, "-I", "-B", script_path]
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-
-            stdout, stderr = process.communicate(timeout=timeout)
-            exec_time = round(time.time() - start_time, 4)
-
-            if process.returncode == 0:
-                return SandboxExecutionResult(
-                    status="SUCCESS",
-                    stdout=stdout.strip(),
-                    stderr=stderr.strip(),
-                    result=stdout.strip(),
-                    execution_time_sec=exec_time,
-                    violations=[],
-                )
-            else:
-                return SandboxExecutionResult(
-                    status="ERROR",
-                    stdout=stdout.strip(),
-                    stderr=stderr.strip(),
-                    result=None,
-                    execution_time_sec=exec_time,
-                    violations=[],
-                )
-
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
-            return SandboxExecutionResult(
-                status="TIMEOUT",
-                stdout=stdout.strip() if stdout else "",
-                stderr=f"Execution timed out after {timeout} seconds.",
-                result=None,
-                execution_time_sec=round(time.time() - start_time, 4),
-                violations=[f"Execution exceeded timeout limit of {timeout}s"],
-            )
-        except Exception as exc:
-            return SandboxExecutionResult(
-                status="ERROR",
-                stdout="",
-                stderr=str(exc),
-                result=None,
-                execution_time_sec=round(time.time() - start_time, 4),
-                violations=[],
-            )
-        finally:
-            import os
+        request = {
+            "code": code,
+            "inputs": inputs or {},
+            "purpose": purpose,
+            "timeout_sec": timeout_sec or settings.SANDBOX_TIMEOUT_SECONDS,
+            "sandbox_id": sandbox_id,
+        }
+        if settings.SANDBOX_URL:
             try:
-                if os.path.exists(script_path):
-                    os.remove(script_path)
-            except Exception:
+                response = httpx.post(
+                    f"{settings.SANDBOX_URL.rstrip('/')}/execute",
+                    json=request,
+                    timeout=(2.0, float(request["timeout_sec"]) + 3.0),
+                )
+                response.raise_for_status()
+                return SandboxExecutionResult.model_validate(response.json())
+            except Exception as exc:
+                if not settings.SANDBOX_ALLOW_LOCAL_FALLBACK:
+                    return self._result("SANDBOX_UNAVAILABLE", sandbox_id, code_hash, started, stderr="Isolated sandbox unavailable.")
+                logger.warning("Isolated sandbox unavailable; using development compatibility fallback: %s", exc)
+        return self._local_compatibility_execute(code, request, sandbox_id, code_hash, started)
+
+    def _local_compatibility_execute(self, code: str, request: Dict[str, Any], sandbox_id: str, code_hash: str, started: float) -> SandboxExecutionResult:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+            script_path = tmp.name
+            tmp.write(code)
+        try:
+            process = subprocess.Popen(
+                [sys.executable, "-I", "-B", script_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                env={"PYTHONNOUSERSITE": "1"},
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=float(request["timeout_sec"]))
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+                return self._result("TIMEOUT", sandbox_id, code_hash, started, stdout, f"Execution timed out after {request['timeout_sec']} seconds.", [f"Execution exceeded timeout limit of {request['timeout_sec']}s"])
+            stdout = stdout[: settings.SANDBOX_MAX_OUTPUT_BYTES].strip()
+            stderr = stderr[: settings.SANDBOX_MAX_OUTPUT_BYTES].strip()
+            status = "SUCCESS" if process.returncode == 0 else "ERROR"
+            return self._result(status, sandbox_id, code_hash, started, stdout, stderr, result=stdout.strip())
+        finally:
+            try:
+                os.remove(script_path)
+            except OSError:
                 pass
+
+    @staticmethod
+    def _result(status: str, sandbox_id: str, code_hash: str, started: float, stdout: str = "", stderr: str = "", result: Any = None, violations: Optional[List[str]] = None) -> SandboxExecutionResult:
+        elapsed = round(time.monotonic() - started, 4)
+        return SandboxExecutionResult(
+            status=status, stdout=stdout, stderr=stderr, result=result,
+            execution_time_sec=elapsed, execution_time_ms=int(elapsed * 1000),
+            violations=violations or [], sandbox_id=sandbox_id,
+            network_enabled=False, code_hash=code_hash,
+        )
 
 
 sandbox_service = CodeSandbox()

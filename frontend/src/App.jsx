@@ -1,89 +1,142 @@
-import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import ChatWindow from './components/ChatWindow';
-import RightDrawer from './components/RightDrawer';
-import AuditModal from './components/AuditModal';
-import SandboxModal from './components/SandboxModal';
-import KnowledgeHubModal from './components/KnowledgeHubModal';
-import DocViewerModal from './components/DocViewerModal';
-import { fetchHealthStatus, loginUser } from './services/api';
+import React, { useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import LandingPage from './components/LandingPage';
+import LoginPage from './components/LoginPage';
+import { loginUser } from './services/api';
+import EnterpriseWorkspace from './components/EnterpriseWorkspace';
+import './landing.css';
+import './login.css';
+import './workbench.css';
 
-export default function App() {
-  const [activeModel, setActiveModel] = useState('Qwen 2.5 7B');
-  const [systemHealth, setSystemHealth] = useState(null);
-  const [currentResponse, setCurrentResponse] = useState(null);
-  const [activeTab, setActiveTab] = useState('context');
-  const [currentUser, setCurrentUser] = useState(null);
-
-  const [auditOpen, setAuditOpen] = useState(false);
-  const [sandboxOpen, setSandboxOpen] = useState(false);
-  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-
-  const [selectedCitation, setSelectedCitation] = useState(null);
-  const [docViewerOpen, setDocViewerOpen] = useState(false);
-
-  const handleRoleSwitch = async (newRole) => {
-    try {
-      const authData = await loginUser(`user_${newRole.toLowerCase()}`, newRole);
-      setCurrentUser(authData.user);
-    } catch (err) {
-      console.error('Role switch error:', err);
-    }
+const normalizeUser = (user) => {
+  const username = user?.username || user?.name || 'engineer';
+  const role = (user?.role || 'ENGINEER').toUpperCase();
+  const clearance = user?.clearance || user?.clearance_tags?.[0] || role;
+  return {
+    ...user,
+    id: user?.id || username,
+    username,
+    name: user?.name || username,
+    role,
+    clearance,
+    clearance_tags: user?.clearance_tags || [clearance],
+    initials: (user?.name || username)
+      .split(/\s+/)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'AI',
   };
+};
 
-  const handleOpenCitation = (citation) => {
-    setSelectedCitation(citation);
-    setDocViewerOpen(true);
-  };
+const readStoredUser = () => {
+  try {
+    const saved = localStorage.getItem('aegis_user');
+    return saved ? normalizeUser(JSON.parse(saved)) : null;
+  } catch {
+    return null;
+  }
+};
 
-  useEffect(() => {
-    fetchHealthStatus().then((data) => {
-      if (data) setSystemHealth(data);
-    });
-    // Auto login default user (ENGINEER)
-    handleRoleSwitch('ENGINEER');
-  }, []);
+function isAuthenticated() {
+  return Boolean(localStorage.getItem('aegis_jwt_token') && readStoredUser());
+}
 
+function ProtectedWorkspace({ currentUser, onLogout, accessDeniedMessage }) {
+  const location = useLocation();
+  if (!currentUser || !isAuthenticated()) {
+    const destination = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/login" replace state={{ from: destination }} />;
+  }
   return (
-    <div className="app-container">
-      <Header
-        systemHealth={systemHealth}
-        currentUser={currentUser}
-        onSelectRole={handleRoleSwitch}
-      />
-      <div className="workbench-layout">
-        <Sidebar
-          activeModel={activeModel}
-          setActiveModel={setActiveModel}
-          onOpenAudit={() => setAuditOpen(true)}
-          onOpenSandbox={() => setSandboxOpen(true)}
-          onOpenKnowledgeHub={() => setKnowledgeOpen(true)}
-        />
-        <ChatWindow
-          activeModel={activeModel}
-          setActiveModel={setActiveModel}
-          currentUser={currentUser}
-          onNewResponse={(resp) => setCurrentResponse(resp)}
-          onSelectCitation={handleOpenCitation}
-        />
-        <RightDrawer
-          response={currentResponse}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onSelectCitation={handleOpenCitation}
-        />
-      </div>
-
-      <AuditModal isOpen={auditOpen} onClose={() => setAuditOpen(false)} />
-      <SandboxModal isOpen={sandboxOpen} onClose={() => setSandboxOpen(false)} />
-      <KnowledgeHubModal isOpen={knowledgeOpen} onClose={() => setKnowledgeOpen(false)} />
-      <DocViewerModal
-        isOpen={docViewerOpen}
-        citation={selectedCitation}
-        onClose={() => setDocViewerOpen(false)}
-      />
-    </div>
+    <EnterpriseWorkspace
+      currentUser={currentUser}
+      accessDeniedMessage={accessDeniedMessage}
+      onLogout={onLogout}
+    />
   );
 }
 
+function LoginRoute({ onLogin, sessionMessage }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const requestedPath = location.state?.from;
+  const safeDestination = typeof requestedPath === 'string'
+    && requestedPath.startsWith('/')
+    && !requestedPath.startsWith('//')
+    && !requestedPath.startsWith('/login')
+    ? requestedPath
+    : '/workspace';
+
+  const handleLogin = async (credentials) => {
+    await onLogin(credentials);
+    navigate(safeDestination, { replace: true });
+  };
+
+  return <LoginPage onLogin={handleLogin} sessionMessage={sessionMessage} />;
+}
+
+export default function App() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState(readStoredUser);
+  const [sessionMessage, setSessionMessage] = useState('');
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setCurrentUser(null);
+      setSessionMessage('Your session expired. Please sign in again.');
+      navigate('/login', { replace: true });
+    };
+    const handleAccessDenied = (event) => {
+      setAccessDeniedMessage(event.detail || 'Access denied for this operation.');
+    };
+    window.addEventListener('aegis:session-expired', handleSessionExpired);
+    window.addEventListener('aegis:access-denied', handleAccessDenied);
+    return () => {
+      window.removeEventListener('aegis:session-expired', handleSessionExpired);
+      window.removeEventListener('aegis:access-denied', handleAccessDenied);
+    };
+  }, [navigate]);
+
+  const handleLogin = async (credentials) => {
+    const username = credentials?.username?.trim();
+    const password = credentials?.password;
+    try {
+      const data = await loginUser(username, password);
+      const user = normalizeUser({ ...(data?.user || {}), username });
+      setCurrentUser(user);
+      setSessionMessage('');
+      localStorage.setItem('aegis_user', JSON.stringify(user));
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('aegis_jwt_token');
+    localStorage.removeItem('aegis_user');
+    setCurrentUser(null);
+    setAccessDeniedMessage('');
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage onEnter={() => navigate('/login')} />} />
+      <Route path="/login" element={<LoginRoute onLogin={handleLogin} sessionMessage={sessionMessage} />} />
+      <Route
+        path="/workspace/*"
+        element={(
+          <ProtectedWorkspace
+            currentUser={currentUser}
+            accessDeniedMessage={accessDeniedMessage}
+            onLogout={handleLogout}
+          />
+        )}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

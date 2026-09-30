@@ -14,6 +14,8 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 GENESIS_HASH = "GENESIS_SOVEREIGN_ANCHOR_00000000000000000000000000000000"
@@ -37,12 +39,31 @@ class AuditRecord(BaseModel):
 
 
 class AuditService:
-    def __init__(self) -> None:
+    def __init__(self, session_factory=None) -> None:
         self._store: List[Dict[str, Any]] = []
+        if session_factory is None:
+            from app.db.session import SessionLocal
+            session_factory = SessionLocal
+        self._session_factory = session_factory
+        self._load_persistent_records()
+
+    def _load_persistent_records(self) -> None:
+        try:
+            from app.db.repository import list_audit_records
+            with self._session_factory() as db:
+                self._store = list_audit_records(db)
+        except Exception as exc:
+            logger.warning("Persistent audit storage unavailable: %s", exc)
 
     def clear(self) -> None:
         """Reset the audit store (primarily for testing)."""
         self._store.clear()
+        try:
+            from app.db.repository import clear_audit_records
+            with self._session_factory() as db:
+                clear_audit_records(db)
+        except Exception as exc:
+            logger.warning("Unable to clear persistent audit storage: %s", exc)
 
     def get_logs(self) -> List[Dict[str, Any]]:
         """Return all logged audit records."""
@@ -80,6 +101,8 @@ class AuditService:
         hitl_approval_required: bool = False,
         equipment_tag: str = "N/A",
         status: str = "LOGGED",
+        run_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create, hash-chain, and store a new audit record."""
         entry_id = f"AUDIT-{len(self._store) + 1001}"
@@ -102,6 +125,8 @@ class AuditService:
             "equipment_tag": equipment_tag,
             "status": status,
             "previous_hash": previous_hash,
+            "run_id": run_id,
+            "metadata": metadata or {},
         }
 
         entry_hash = self._compute_entry_hash(previous_hash, entry_dict)
@@ -109,8 +134,26 @@ class AuditService:
         entry_dict["integrity_hash"] = entry_hash
 
         self._store.append(entry_dict)
+        try:
+            from app.db.repository import find_user, save_audit_record
+            with self._session_factory() as db:
+                user = find_user(db, username)
+                save_audit_record(db, entry_dict, user.id if user else None)
+        except Exception as exc:
+            logger.exception("Unable to persist audit record %s", entry_id)
+            if settings.ENVIRONMENT != "development":
+                raise RuntimeError("Audit persistence is unavailable") from exc
         logger.info("Audit entry logged: id=%s hash=%s...", entry_id, entry_hash[:12])
         return entry_dict
+
+    def log_event(self, **kwargs: Any) -> Dict[str, Any]:
+        """Compatibility wrapper used by chat feedback and older callers."""
+        details = kwargs.pop("details", None)
+        if details and not kwargs.get("diagnosis_summary"):
+            kwargs["diagnosis_summary"] = json.dumps(details, default=str)[:200]
+        if not kwargs.get("clearance_tags"):
+            kwargs["clearance_tags"] = ["INTERNAL"]
+        return self.log_entry(**kwargs)
 
     def verify_audit_chain(self) -> Dict[str, Any]:
         """Verify integrity of the audit log hash chain.

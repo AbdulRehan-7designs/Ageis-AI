@@ -41,7 +41,7 @@ _CAPABILITY_PATTERNS = re.compile(
 def _classify_query(query: str) -> str:
     """Classify query intent: 'greeting', 'capability', 'equipment', or 'knowledge'."""
     stripped = query.strip()
-    if len(stripped) < 15 and _GREETING_PATTERNS.search(stripped):
+    if len(stripped) < 40 and _GREETING_PATTERNS.search(stripped) and not _EQUIPMENT_PATTERNS.search(stripped):
         return "greeting"
     if _CAPABILITY_PATTERNS.search(stripped):
         return "capability"
@@ -70,19 +70,7 @@ def _greeting_response(query: str) -> Dict[str, Any]:
         "engine": "deterministic-greeting-responder",
         "execution_time_sec": 0.01,
         "equipment_details": None,
-        "recommended_action": {
-            "title": "Get Started",
-            "sop_code": "N/A",
-            "requires_approval": False,
-            "steps": [
-                "Ask a question about your industrial equipment or SOPs.",
-                "Upload a PDF document to enrich the knowledge base.",
-                "Use the Code Sandbox for diagnostic calculations.",
-            ],
-            "why_reasoning": [
-                "AegisAI is ready to assist with maintenance intelligence queries."
-            ],
-        },
+        "recommended_action": None,
         "risk_score": 0.0,
     }
 
@@ -105,20 +93,7 @@ def _capability_response(query: str) -> Dict[str, Any]:
         "engine": "deterministic-capability-responder",
         "execution_time_sec": 0.01,
         "equipment_details": None,
-        "recommended_action": {
-            "title": "Explore AegisAI Features",
-            "sop_code": "N/A",
-            "requires_approval": False,
-            "steps": [
-                "Ask about equipment diagnostics (e.g., 'Diagnose P-204').",
-                "Upload SOPs or manuals via the attachment button.",
-                "Open the Code Sandbox from the sidebar for calculations.",
-                "View the Audit & Governance panel for hash-chained logs.",
-            ],
-            "why_reasoning": [
-                "All capabilities run on-premise with zero external API calls."
-            ],
-        },
+        "recommended_action": None,
         "risk_score": 0.0,
     }
 
@@ -144,35 +119,50 @@ def _knowledge_response(query: str, rag_context: Optional[str] = None) -> Dict[s
         "engine": "deterministic-knowledge-responder",
         "execution_time_sec": 0.02,
         "equipment_details": None,
-        "recommended_action": {
-            "title": "Review Retrieved Evidence",
-            "sop_code": "N/A",
-            "requires_approval": False,
-            "steps": [
-                "Review the citations panel on the right for source documents.",
-                "Upload additional documents if the answer is incomplete.",
-            ],
-            "why_reasoning": [
-                "Response synthesised from retrieved knowledge base evidence."
-                if rag_context
-                else "No strong match found — consider uploading relevant documents."
-            ],
-        },
+        "recommended_action": None,
         "risk_score": 0.0,
     }
 
 
-def _equipment_response(query: str) -> Dict[str, Any]:
-    """Equipment diagnostic — the original heuristic rule engine."""
+def _equipment_response(query: str, rag_context: Optional[str] = None) -> Dict[str, Any]:
+    """Equipment diagnostic — only reports data actually found in retrieved evidence."""
     q = query.lower()
+    eq_match = re.search(r"[a-z]{1,3}-?\s*(\d{2,4})", q)
+    eq_tag = eq_match.group(0).upper().replace(" ", "") if eq_match else None
 
-    # Extract equipment ID
-    eq_match = re.search(r"p-?\s*(\d{2,4})", q)
-    eq_tag = f"P-{eq_match.group(1)}" if eq_match else "P-204"
+    if not rag_context or not rag_context.strip():
+        return {
+            "reply_title": f"No Data Found for {eq_tag or 'Requested Equipment'}",
+            "diagnosis_summary": (
+                f"No telemetry or maintenance records for {eq_tag or 'the requested equipment'} "
+                f"were found in the knowledge base. Recommendation: verify the equipment tag, "
+                f"or upload relevant sensor logs / maintenance manuals to enable diagnosis."
+            ),
+            "engine": "deterministic-equipment-no-evidence",
+            "execution_time_sec": 0.02,
+            "equipment_details": None,
+            "recommended_action": None,
+            "risk_score": 0.0,
+        }
 
-    # Extract vibration value if mentioned
-    vib_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm/s|mms)", q)
-    vibration_val = float(vib_match.group(1)) if vib_match else 8.2
+    vib_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mm/s|mms)", rag_context, re.IGNORECASE)
+    if not vib_match:
+        return {
+            "reply_title": f"Partial Evidence Found for {eq_tag or 'Equipment'}",
+            "diagnosis_summary": (
+                f"Related documents were retrieved, but no specific vibration/sensor reading "
+                f"for {eq_tag or 'this equipment'} was found in the evidence. "
+                f"See citations for relevant procedures."
+            ),
+            "engine": "deterministic-equipment-partial-evidence",
+            "execution_time_sec": 0.02,
+            "equipment_details": None,
+            "recommended_action": None,
+            "risk_score": 0.0,
+        }
+
+    vibration_val = float(vib_match.group(1))
+    eq_tag = eq_tag or "Unspecified Equipment"
 
     # Heuristic rule logic
     if vibration_val > 7.1:
@@ -279,7 +269,7 @@ class DeterministicFallbackEngine:
         elif intent == "capability":
             return _capability_response(user_query)
         elif intent == "equipment":
-            return _equipment_response(user_query)
+            return _equipment_response(user_query, rag_context=rag_context)
         else:
             return _knowledge_response(user_query, rag_context=rag_context)
 

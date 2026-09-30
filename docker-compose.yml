@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: aegis_ai
       POSTGRES_USER: aegis_user
-      POSTGRES_PASSWORD: aegis_secure_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-local-password}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +22,8 @@ services:
     container_name: aegis_qdrant
     restart: always
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -37,7 +37,7 @@ services:
     container_name: aegis_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -50,19 +50,26 @@ services:
     image: ollama/ollama:latest
     container_name: aegis_ollama
     restart: always
+    environment:
+      - OLLAMA_HOST=0.0.0.0
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_models:/root/.ollama
-      - ./backend/ollama_entrypoint.sh:/ollama_entrypoint.sh
-    entrypoint: ["/bin/bash", "/ollama_entrypoint.sh"]
-    tty: true
+      - ./backend/ollama_entrypoint.sh:/ollama_entrypoint.sh:ro
+    # Copy+strip CR so Windows checkouts still boot, including when the mount is read-only.
+    entrypoint:
+      [
+        "/bin/bash",
+        "-lc",
+        "sed 's/\\r$//' /ollama_entrypoint.sh > /tmp/ollama_entrypoint.sh && exec /bin/bash /tmp/ollama_entrypoint.sh",
+      ]
     healthcheck:
       test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 30s
+      retries: 18
+      start_period: 45s
 
   backend:
     build:
@@ -71,18 +78,41 @@ services:
     container_name: aegis_backend
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
+      - ./backend/uploaded_docs:/app/uploaded_docs
       - fastembed_cache:/root/.cache/fastembed
     environment:
-      - DATABASE_URL=postgresql://aegis_user:aegis_secure_password@postgres:5432/aegis_ai
+      - DATABASE_URL=postgresql://aegis_user:${POSTGRES_PASSWORD:-change-this-local-password}@postgres:5432/aegis_ai
+      - AEGIS_BOOTSTRAP_USERS_JSON=${AEGIS_BOOTSTRAP_USERS_JSON:-[]}
+      - POSTGRES_SERVER=postgres
+      - REDIS_HOST=redis
       - REDIS_URL=redis://redis:6379/0
       - FASTEMBED_CACHE_PATH=/root/.cache/fastembed
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_COLLECTION=industrial_docs
       - OLLAMA_BASE_URL=http://ollama:11434
+      - DEFAULT_CHAT_MODEL=qwen2.5:3b
+      - DEFAULT_CODER_MODEL=qwen2.5-coder:3b
+      - DEFAULT_VISION_MODEL=
+      - AEGIS_ALLOW_MODEL_DOWNLOADS=false
+      - EGRESS_MONITOR_ENABLED=true
+      - EGRESS_ENFORCE=true
+      - SANDBOX_URL=http://aegis_sandbox:8080
+      - SANDBOX_ALLOW_LOCAL_FALLBACK=false
+      - SANDBOX_TIMEOUT_SECONDS=5
+      - SANDBOX_MEMORY_MB=256
+      - SANDBOX_CPU_LIMIT=0.5
+      - SANDBOX_MAX_OUTPUT_BYTES=65536
+      - SANDBOX_MAX_INPUT_BYTES=32768
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +122,29 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      sandbox:
+        condition: service_started
+    networks:
+      - default
+      - sandbox_internal
+
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    container_name: aegis_sandbox
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    mem_limit: 256m
+    cpus: 0.5
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - sandbox_internal
 
   frontend:
     build:
@@ -102,7 +155,8 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
@@ -110,3 +164,7 @@ volumes:
   redis_data:
   ollama_models:
   fastembed_cache:
+
+networks:
+  sandbox_internal:
+    internal: true

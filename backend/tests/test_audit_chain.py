@@ -31,6 +31,9 @@ class TestTamperEvidentAuditChain(unittest.TestCase):
             data={"sub": "operator_test_user", "role": "ENGINEER", "clearance_tags": ["PUBLIC", "INTERNAL"]}
         )
         headers = {"Authorization": f"Bearer {token}"}
+        audit_headers = {
+            "Authorization": f"Bearer {create_access_token(data={'sub': 'audit_test_user', 'role': 'AUDITOR', 'clearance_tags': ['INTERNAL']})}"
+        }
 
         queries = [
             "What is the status of pump P-101 vibration levels?",
@@ -48,11 +51,13 @@ class TestTamperEvidentAuditChain(unittest.TestCase):
         hitl_resp = client.post(
             "/api/v1/hitl/approve",
             json={"action_id": "ACT-999", "equipment_tag": "P-101", "approved_by": "operator_test_user"},
+            headers=headers,
         )
         self.assertEqual(hitl_resp.status_code, 200)
 
         logs = audit_service.get_logs()
-        self.assertEqual(len(logs), 4, f"Expected 4 audit records, got {len(logs)}")
+        self.assertGreaterEqual(len(logs), 4, f"Expected at least 4 audit records, got {len(logs)}")
+        self.assertEqual(logs[-1]["event_type"], "HITL_APPROVAL")
         print(f"Logged {len(logs)} audit entries successfully.")
 
         # Step (b): Confirm verify_audit_chain() passes
@@ -63,7 +68,7 @@ class TestTamperEvidentAuditChain(unittest.TestCase):
         self.assertIsNone(verification_1["broken_index"], "broken_index should be None for valid chain")
 
         # Confirm via endpoint GET /api/v1/audit/verify
-        endpoint_resp = client.get("/api/v1/audit/verify")
+        endpoint_resp = client.get("/api/v1/audit/verify", headers=audit_headers)
         self.assertEqual(endpoint_resp.status_code, 200)
         self.assertTrue(endpoint_resp.json()["is_valid"])
 
@@ -85,12 +90,41 @@ class TestTamperEvidentAuditChain(unittest.TestCase):
         self.assertIn("Content tamper detected", verification_2["reason"])
 
         # Verify endpoint also reports the tamper break
-        endpoint_tamper_resp = client.get("/api/v1/audit/verify")
+        endpoint_tamper_resp = client.get("/api/v1/audit/verify", headers=audit_headers)
         self.assertEqual(endpoint_tamper_resp.status_code, 200)
         data = endpoint_tamper_resp.json()
         self.assertFalse(data["is_valid"])
         self.assertEqual(data["broken_index"], tampered_index)
         print(f"[PASS] Tamper Detection Test Passed! Correctly reported break at index {tampered_index} ({tampered_entry_id})")
+
+    def test_maintenance_report_is_audited_and_preserves_evidence(self):
+        client = TestClient(app)
+        token = create_access_token(
+            data={"sub": "engineer_test_user", "role": "ENGINEER", "clearance_tags": ["PUBLIC", "INTERNAL"]}
+        )
+        response = client.post(
+            "/api/v1/reports/maintenance",
+            json={
+                "asset": "P-204",
+                "issue_summary": "Elevated vibration",
+                "diagnosis": "Warning-band vibration requires inspection.",
+                "findings": ["Check coupling alignment."],
+                "evidence_blocks": [{
+                    "document": "SOP-017_Pump_Maintenance.pdf",
+                    "location": {"page": 4},
+                    "classification": "INTERNAL",
+                    "snippet": "Warning threshold is 4.5 - 7.1 mm/s.",
+                }],
+                "hitl_approval_required": True,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("REPORT-", data["report_id"])
+        self.assertIn("SOP-017_Pump_Maintenance.pdf", data["content"])
+        self.assertIn("No operational command executed.", data["content"])
+        self.assertEqual(audit_service.get_logs()[-1]["event_type"], "REPORT_GENERATED")
 
 
 if __name__ == "__main__":

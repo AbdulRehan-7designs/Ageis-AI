@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aegis AI: Interactive Deep Dive</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f4;--panel:#fff;--ink:#14212e;--mut:#556676;--line:#c5ced8;--acc:#d9480f;--ok:#2b8a3e;--bad:#c92a2a;--node:#dfe7ee;--hl:#ffe8cc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1720;--panel:#16212d;--ink:#e6edf3;--mut:#93a4b5;--line:#2b3a49;--acc:#ff922b;--ok:#69db7c;--bad:#ff8787;--node:#1d2b3a;--hl:#4a3218}}
+:root[data-theme="dark"]{--bg:#0f1720;--panel:#16212d;--ink:#e6edf3;--mut:#93a4b5;--line:#2b3a49;--acc:#ff922b;--ok:#69db7c;--bad:#ff8787;--node:#1d2b3a;--hl:#4a3218}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 "Source Sans 3",system-ui,sans-serif}
+h1,h2,h3{font-family:"Barlow Semi Condensed","Arial Narrow",sans-serif;font-weight:600;margin:0;letter-spacing:.2px}
+main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border:2px solid var(--ink);background:var(--panel);padding:16px 18px}
+header h1{font-size:34px;line-height:1.1}
+header p{margin:6px 0 0;color:var(--mut);max-width:60ch}
+.tb{border-left:1px solid var(--line);padding-left:14px;font-size:13px;color:var(--mut);min-width:150px}
+.tb b{color:var(--ink)}
+#theme{margin-top:8px;font:inherit;font-size:13px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:3px 8px;cursor:pointer}
+nav{display:flex;flex-wrap:wrap;gap:0;margin:18px 0 0;border-bottom:2px solid var(--ink)}
+nav button{font:600 15px "Barlow Semi Condensed",sans-serif;background:none;color:var(--mut);border:0;border-bottom:4px solid transparent;padding:9px 14px;cursor:pointer;margin-bottom:-2px}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--acc)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,g:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+section{display:none;padding-top:22px}
+section.on{display:block}
+h2{font-size:26px;margin-bottom:4px}
+.lead{color:var(--mut);margin:0 0 16px;max-width:70ch}
+.panel{background:var(--panel);border:1px solid var(--line);padding:14px 16px;margin-top:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.row{grid-template-columns:1fr}header{flex-direction:column}.tb{border:0;padding:0}}
+svg{width:100%;height:auto;display:block}
+.n rect{fill:var(--node);stroke:var(--ink);stroke-width:1.5;cursor:pointer}
+.n text{fill:var(--ink);font:600 14px "Barlow Semi Condensed",sans-serif;pointer-events:none}
+.n.sel rect{fill:var(--acc);stroke:var(--acc)}.n.sel text{fill:#fff}
+.n{cursor:pointer}
+.e{stroke:var(--mut);stroke-width:1.5;fill:none}
+.e.hot{stroke:var(--acc);stroke-width:3}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:"Barlow Semi Condensed",sans-serif}
+code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+pre{background:var(--bg);border:1px solid var(--line);padding:10px;overflow-x:auto;margin:8px 0 0}
+input[type=range]{width:100%;accent-color:var(--acc)}
+input[type=text],input[type=number],textarea,select{width:100%;font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:6px 8px}
+label{display:block;font-weight:600;margin:8px 0 2px}
+.btn{font:600 14px "Barlow Semi Condensed",sans-serif;background:var(--ink);color:var(--bg);border:0;padding:7px 14px;cursor:pointer;margin-right:6px}
+.btn.alt{background:none;color:var(--ink);border:1px solid var(--ink)}
+.bar{height:22px;background:var(--acc);color:#fff;font-size:13px;padding:0 6px;line-height:22px;margin:4px 0;transition:width .35s;white-space:nowrap;overflow:hidden}
+.pill{display:inline-block;border:1px solid var(--line);padding:0 8px;font-size:12px;margin-right:4px}
+.lock{opacity:.4;text-decoration:line-through}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}
+mark{background:var(--hl);color:inherit}
+.chunk{border-left:4px solid var(--acc);padding:4px 8px;margin:6px 0;background:var(--bg);font-size:13px;word-break:break-word}
+.blk{border:2px solid var(--line);padding:10px;margin:8px 0;background:var(--panel)}
+.blk.broken{border-color:var(--bad)}.blk.good{border-color:var(--ok)}
+.h{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--mut);word-break:break-all}
+@media(prefers-reduced-motion:reduce){.bar{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div>
+    <h1>Aegis AI: how it works</h1>
+    <p>An on-premise workbench that answers from your own engineering documents, with citations, clearance checks, and a tamper-evident audit trail. Click, drag, and edit everything below.</p>
+  </div>
+  <div class="tb"><b>Smart India Hackathon 2026</b><br>PS 26117<br>Abdul Rehan, MJCET<br><button id="theme" type="button">Switch theme</button></div>
+</header>
+
+<nav role="tablist" id="tabs">
+  <button role="tab" data-t="arch" aria-selected="true">System map</button>
+  <button role="tab" data-t="ret" aria-selected="false">Retrieval</button>
+  <button role="tab" data-t="ing" aria-selected="false">Ingestion</button>
+  <button role="tab" data-t="aud" aria-selected="false">Audit chain</button>
+  <button role="tab" data-t="sec" aria-selected="false">Security</button>
+  <button role="tab" data-t="api" aria-selected="false">API</button>
+</nav>
+
+<section id="arch" class="on">
+  <h2>System map</h2>
+  <p class="lead">Seven services run under Docker Compose. Select one to see what it does and which connections it uses.</p>
+  <div class="panel"><svg viewBox="0 0 720 340" id="map" role="img" aria-label="Aegis AI service map"></svg></div>
+  <div class="panel" id="nodeInfo"></div>
+</section>
+
+<section id="ret">
+  <h2>Retrieval pipeline</h2>
+  <p class="lead">Hybrid search combines meaning and exact keywords, fuses the rankings inside Qdrant, filters by clearance, then reranks locally. Step through it.</p>
+  <div class="panel">
+    <button class="btn alt" id="prev" type="button">Back</button><button class="btn" id="next" type="button">Next step</button>
+    <span id="stepNo" class="pill"></span>
+    <h3 id="stepT" style="margin-top:10px"></h3>
+    <p id="stepD" style="margin:4px 0 8px"></p>
+    <div id="funnel"></div>
+  </div>
+  <div class="row">
+    <div class="panel">
+      <h3>Reciprocal Rank Fusion calculator</h3>
+      <p class="lead" style="margin-bottom:4px">A chunk's fused score is the sum of 1 / (k + rank) across both result lists.</p>
+      <label for="rd">Rank in dense list: <b id="rdv">2</b></label><input type="range" id="rd" min="1" max="20" value="2">
+      <label for="rs">Rank in sparse list: <b id="rsv">5</b></label><input type="range" id="rs" min="1" max="20" value="5">
+      <label for="rk">Constant k: <b id="rkv">60</b></label><input type="range" id="rk" min="1" max="100" value="60">
+      <p>Fused score: <b id="rrf"></b></p>
+      <p class="lead" style="margin:0">A chunk that appears high in both lists beats one that tops only one list.</p>
+    </div>
+    <div class="panel">
+      <h3>Clearance filter</h3>
+      <label for="clr">Signed in with clearance</label>
+      <select id="clr"><option>INTERNAL</option><option>RESTRICTED</option><option>CONFIDENTIAL</option></select>
+      <table style="margin-top:8px"><tbody id="cl"></tbody></table>
+      <p class="lead" style="margin:8px 0 0">Illustrative ordering: INTERNAL &lt; RESTRICTED &lt; CONFIDENTIAL. Filtering happens at query time and is verified again after reranking.</p>
+    </div>
+  </div>
+</section>
+
+<section id="ing">
+  <h2>Ingestion and chunking</h2>
+  <p class="lead">PDFs are parsed page by page. Tables become single chunks, headers become section titles, and body text is split with overlap so no answer is cut in half.</p>
+  <div class="row">
+    <div class="panel">
+      <label for="txt">Sample text</label>
+      <textarea id="txt" rows="8"></textarea>
+      <label for="cs">Chunk size: <b id="csv">60</b> tokens</label><input type="range" id="cs" min="20" max="200" value="60">
+      <label for="co">Overlap: <b id="cov">10</b> tokens</label><input type="range" id="co" min="0" max="50" value="10">
+      <p class="lead" style="margin:8px 0 0">Production uses 400 tokens with 50 overlap. Tokens are approximated at 4 characters each.</p>
+    </div>
+    <div class="panel"><h3 id="cc"></h3><div id="chunks"></div></div>
+  </div>
+  <div class="panel"><h3>What each chunk stores</h3>
+<pre>chunk_id            P204_Manual.pdf__page_28__chunk_0
+doc_name            P-204_Centrifugal_Pump_Manual.pdf
+page                28            (1-indexed)
+section_title       Vibration Limits and Monitoring
+classification_tag  INTERNAL | RESTRICTED | CONFIDENTIAL
+is_table            false
+vectors             dense 1024-d (cosine) + sparse BM25 (dot)</pre></div>
+</section>
+
+<section id="aud">
+  <h2>Tamper-evident audit chain</h2>
+  <p class="lead">Each audit event stores a hash of its own content plus the previous hash. Edit any event below and watch every later link break. This is an illustration of the idea; the API exposes a verify endpoint for the real chain.</p>
+  <div id="chain"></div>
+  <button class="btn alt" id="reset" type="button">Restore original events</button>
+  <p id="verdict" style="margin-top:10px"></p>
+</section>
+
+<section id="sec">
+  <h2>Security view</h2>
+  <p class="lead">The browser is untrusted. Everything that decides who sees what happens inside your network. Select a threat to see the control that answers it.</p>
+  <div class="panel"><svg viewBox="0 0 720 200" role="img" aria-label="Trust boundaries">
+    <rect x="5" y="5" width="150" height="190" fill="none" stroke="var(--acc)" stroke-dasharray="6 4"/><text x="80" y="28" text-anchor="middle" fill="var(--acc)" font-weight="600">Untrusted</text>
+    <rect x="175" y="5" width="540" height="190" fill="var(--node)" stroke="var(--ink)" stroke-width="2"/><text x="445" y="28" text-anchor="middle" fill="var(--ink)" font-weight="600">Trusted zone: your network</text>
+    <g fill="var(--panel)" stroke="var(--ink)"><rect x="25" y="80" width="110" height="44"/><rect x="200" y="80" width="130" height="44"/><rect x="380" y="50" width="150" height="40"/><rect x="380" y="110" width="150" height="40"/><rect x="560" y="80" width="140" height="44"/></g>
+    <g fill="var(--ink)" text-anchor="middle"><text x="80" y="107">Browser</text><text x="265" y="107">FastAPI: identity + clearance</text><text x="455" y="75">Qdrant: filtered search</text><text x="455" y="135">PostgreSQL: audit chain</text><text x="630" y="107">Ollama: local LLM</text></g>
+    <g stroke="var(--mut)" stroke-width="2" fill="none"><path d="M135 102H200M330 102C355 102 355 70 380 70M330 102C355 102 355 130 380 130M530 70C545 70 545 102 560 102"/></g>
+  </svg></div>
+  <div class="panel"><div class="wrap"><table><thead><tr><th>Threat</th><th>Control</th></tr></thead><tbody id="th"></tbody></table></div><p id="thd" class="lead" style="margin:10px 0 0">Select a row.</p></div>
+  <div class="panel"><h3>Egress guard simulator</h3>
+    <p class="lead" style="margin:4px 0">An illustration of the idea. The real monitor covers guarded httpx clients only and is not a firewall.</p>
+    <label for="host">Outbound host</label><input type="text" id="host" value="api.external-service.com">
+    <label><input type="checkbox" id="guard" checked style="width:auto"> Egress guard enabled</label>
+    <button class="btn" id="send" type="button" style="margin-top:8px">Send request</button>
+    <p id="eg" style="margin-top:10px"></p></div>
+</section>
+
+<section id="api">
+  <h2>API explorer</h2>
+  <p class="lead">Every route except login needs a bearer token. Filter, then select a route for a ready-made request.</p>
+  <div class="panel">
+    <label for="q">Filter routes</label><input type="text" id="q" placeholder="chat, audit, document...">
+    <div class="wrap"><table><thead><tr><th>Method</th><th>Route</th><th>Purpose</th></tr></thead><tbody id="routes"></tbody></table></div>
+    <pre id="curl"></pre>
+  </div>
+  <div class="panel"><h3>Key configuration</h3><div class="wrap"><table><tbody id="cfg"></tbody></table></div></div>
+</section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+/* theme */
+$('#theme').onclick=()=>{const r=document.documentElement,d=matchMedia('(prefers-color-scheme:dark)').matches;const cur=r.dataset.theme||(d?'dark':'light');r.dataset.theme=cur==='dark'?'light':'dark'};
+/* tabs */
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));$$('section').forEach(s=>s.classList.toggle('on',s.id===b.dataset.t))});
+
+/* system map */
+const N={
+ui:{l:'React UI',x:10,y:145,d:'The workbench. Sends a message plus a conversation ID, shows answers with citations, and restores saved chats.',c:['ng']},
+ng:{l:'Nginx',x:150,y:145,d:'Serves the built frontend and fronts the app on port 3000.',c:['ui','api']},
+api:{l:'FastAPI',x:300,y:145,d:'The brain. Endpoints cover auth, chat, conversations, documents, models, audit, reports, and sandbox. Services handle orchestration, retrieval, model routing, ingestion, reporting, and egress. Identity and clearance are resolved here, never in the browser.',c:['ng','pg','rd','qd','ol']},
+pg:{l:'PostgreSQL',x:520,y:20,d:'Persistent conversations, messages, agent runs, and hash-linked audit events.',c:['api']},
+rd:{l:'Redis',x:520,y:105,d:'Cache layer for the API.',c:['api']},
+qd:{l:'Qdrant',x:520,y:190,d:'One collection, industrial_docs, holding dense and sparse vectors. Runs prefetch and RRF fusion server-side.',c:['api']},
+ol:{l:'Ollama',x:520,y:275,d:'Hosts local language models. A task router picks an available model per task type. Model downloads are disabled by default, so provision them first.',c:['api']}};
+const W=140,H=46,svg=$('#map');
+let h='<defs></defs>';
+const seen=new Set();
+for(const k in N)for(const t of N[k].c){const key=[k,t].sort().join();if(seen.has(key))continue;seen.add(key);const a=N[k],b=N[t];const x1=a.x+(a.x<b.x?W:0),x2=b.x+(b.x<a.x?W:0);h+=`<path class="e" data-e="${k},${t}" d="M${x1} ${a.y+H/2} C${(x1+x2)/2} ${a.y+H/2},${(x1+x2)/2} ${b.y+H/2},${x2} ${b.y+H/2}"/>`}
+for(const k in N){const n=N[k];h+=`<g class="n" data-k="${k}" tabindex="0" role="button" aria-label="${n.l}"><rect x="${n.x}" y="${n.y}" width="${W}" height="${H}" rx="3"/><text x="${n.x+W/2}" y="${n.y+28}" text-anchor="middle">${n.l}</text></g>`}
+svg.innerHTML=h;
+function pick(k){$$('.n').forEach(g=>g.classList.toggle('sel',g.dataset.k===k));$$('.e').forEach(e=>e.classList.toggle('hot',e.dataset.e.split(',').includes(k)));$('#nodeInfo').innerHTML=`<h3>${N[k].l}</h3><p style="margin:4px 0 0">${N[k].d}</p><p class="lead" style="margin:8px 0 0">Talks to: ${N[k].c.map(c=>N[c].l).join(', ')}</p>`}
+$$('.n').forEach(g=>{g.onclick=()=>pick(g.dataset.k);g.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(g.dataset.k)}}});
+pick('api');
+
+/* retrieval steps */
+const S=[
+['Embed the question','Two vectors are made on CPU: a dense BGE-M3 vector (1024-d, multilingual) and a sparse BM25 vector via FastEmbed. About 15 ms combined (design estimate).',[1,1]],
+['Prefetch candidates','Qdrant pulls the top 20 by meaning and the top 20 by keyword in a single call.',[20,20]],
+['Fuse with RRF','Reciprocal Rank Fusion merges both lists on the server into one ranking of 20. About 50 ms (design estimate).',[20]],
+['Apply clearance','Chunks above the signed-in clearance are removed, so restricted text never reaches the model.',[20]],
+['Rerank locally','bge-reranker-v2-m3 scores each remaining chunk against the question on CPU and keeps the best 5. About 100 ms (design estimate).',[5]],
+['Answer with citations','A local Ollama model writes the answer from those 5 chunks. Document, page, and snippet are returned and saved with an audit event.',[5]]];
+let si=0;
+function step(){const s=S[si];$('#stepNo').textContent=`Step ${si+1} of ${S.length}`;$('#stepT').textContent=s[0];$('#stepD').textContent=s[1];$('#funnel').innerHTML=s[2].map((n,i)=>`<div class="bar" style="width:${Math.max(n/20*100,6)}%">${n} ${s[2].length>1?(i?'keyword':'meaning'):'chunks'}</div>`).join('');$('#prev').disabled=si===0;$('#next').textContent=si===S.length-1?'Start over':'Next step'}
+$('#next').onclick=()=>{si=(si+1)%S.length;step()};$('#prev').onclick=()=>{if(si>0){si--;step()}};step();
+function rrf(){const d=+$('#rd').value,s=+$('#rs').value,k=+$('#rk').value;$('#rdv').textContent=d;$('#rsv').textContent=s;$('#rkv').textContent=k;$('#rrf').textContent=(1/(k+d)+1/(k+s)).toFixed(5)+`  (dense alone ${(1/(k+d)).toFixed(5)})`}
+['rd','rs','rk'].forEach(i=>$('#'+i).oninput=rrf);rrf();
+const CH=[['P-204 vibration limits, page 28','INTERNAL'],['SOP-017 startup checklist','INTERNAL'],['Seal failure root cause report','RESTRICTED'],['Plant shutdown procedure','RESTRICTED'],['Safety system bypass log','CONFIDENTIAL'],['Site network diagram','CONFIDENTIAL']],RK={INTERNAL:1,RESTRICTED:2,CONFIDENTIAL:3};
+function cl(){const c=RK[$('#clr').value];$('#cl').innerHTML=CH.map(x=>`<tr class="${RK[x[1]]>c?'lock':''}"><td>${x[0]}</td><td><span class="pill">${x[1]}</span></td><td class="${RK[x[1]]>c?'bad':'ok'}">${RK[x[1]]>c?'hidden':'visible'}</td></tr>`).join('')}
+$('#clr').onchange=cl;cl();
+
+/* chunker */
+$('#txt').value='Vibration limits for the P-204 centrifugal pump are defined per ISO velocity bands. Normal operation is below 4.5 mm/s. A warning is raised between 4.5 and 7.1 mm/s, and anything above 7.1 mm/s is critical and requires a controlled shutdown. Readings are taken at the drive-end and non-drive-end bearing housings. Record each value in the shift log and compare against the previous week before deciding whether to escalate to maintenance planning.';
+function chunk(){const t=$('#txt').value,cs=+$('#cs').value;let co=+$('#co').value;if(co>=cs){co=cs-1}$('#csv').textContent=cs;$('#cov').textContent=co;const W=cs*4,O=co*4,step=Math.max(W-O,4),esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));let out=[],i=0;while(i<t.length){const p=t.slice(i,i+W);out.push(i>0&&O?`<mark>${esc(p.slice(0,O))}</mark>${esc(p.slice(O))}`:esc(p));if(i+W>=t.length)break;i+=step}$('#cc').textContent=`${out.length} chunks from about ${Math.ceil(t.length/4)} tokens`;$('#chunks').innerHTML=out.map((c,j)=>`<div class="chunk"><b>#${j}</b> ${c}</div>`).join('')+'<p class="lead" style="margin:6px 0 0">Highlighted text is shared with the previous chunk.</p>'}
+['txt','cs','co'].forEach(i=>$('#'+i).oninput=chunk);chunk();
+
+/* audit chain */
+const ORIG=['user ana logged in','ana asked about P-204 vibration','answer returned with 3 citations','ana downloaded SOP-017'];
+let ev=[...ORIG],stored=[];
+async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function chainOf(a){let p='GENESIS',o=[];for(const e of a){p=await sha(p+'|'+e);o.push(p)}return o}
+async function draw(){const cur=await chainOf(ev);let first=-1;const html=ev.map((e,i)=>{const bad=cur[i]!==stored[i];if(bad&&first<0)first=i;return`<div class="blk ${bad?'broken':'good'}"><label for="e${i}">Event ${i+1}</label><input type="text" id="e${i}" value="${e.replace(/"/g,'&quot;')}" data-i="${i}"><div class="h">hash: ${cur[i].slice(0,32)}...</div><div class="${bad?'bad':'ok'}">${bad?'Does not match the stored hash':'Matches the stored hash'}</div></div>`}).join('');const act=document.activeElement&&document.activeElement.dataset.i,pos=document.activeElement.selectionStart;$('#chain').innerHTML=html;if(act!==undefined){const el=$('#e'+act);if(el){el.focus();el.setSelectionRange(pos,pos)}}$$('#chain input').forEach(inp=>inp.oninput=()=>{ev[+inp.dataset.i]=inp.value;draw()});$('#verdict').innerHTML=first<0?'<span class="ok">Chain verified. No event has been changed.</span>':`<span class="bad">Chain broken at event ${first+1}. Every event after it also fails, so the exact point of tampering is visible.</span>`}
+$('#reset').onclick=()=>{ev=[...ORIG];draw()};
+chainOf(ORIG).then(c=>{stored=c;draw()});
+
+/* API */
+const R=[['POST','/api/v1/auth/login','Sign in and receive a bearer token',{username:'...',password:'...'}],['POST','/api/v1/chat','Send a chat message',{message:'What are the vibration limits for P-204?',history:[],classification_filter:'INTERNAL'}],['POST','/api/v1/chat/stream','Stream a chat response',{message:'...'}],['GET','/api/v1/conversations','List accessible conversations'],['GET','/api/v1/conversations/{id}','Restore a conversation'],['POST','/api/v1/document/upload','Ingest a document with a classification tag'],['GET','/api/v1/document/list','List accessible indexed documents'],['GET','/api/v1/models','View the model catalog'],['GET','/api/v1/agent-runs','View agent runs'],['GET','/api/v1/audit/logs','View permitted audit events'],['GET','/api/v1/audit/verify','Verify the audit hash chain'],['GET','/api/v1/health','Health check']];
+function routes(){const q=$('#q').value.toLowerCase();$('#routes').innerHTML=R.filter(r=>(r[0]+r[1]+r[2]).toLowerCase().includes(q)).map(r=>`<tr data-i="${R.indexOf(r)}" style="cursor:pointer"><td><span class="pill">${r[0]}</span></td><td><code>${r[1]}</code></td><td>${r[2]}</td></tr>`).join('');$$('#routes tr').forEach(tr=>tr.onclick=()=>show(+tr.dataset.i))}
+function show(i){const r=R[i];let c=`curl -X ${r[0]} http://localhost:8000${r[1]}`;if(!r[1].includes('login')&&!r[1].includes('health'))c+=` \\\n  -H "Authorization: Bearer <token>"`;if(r[1].includes('upload'))c+=` \\\n  -F "file=@P204_Manual.pdf" \\\n  -F "classification_tag=INTERNAL"`;else if(r[3])c+=` \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(r[3])}'`;$('#curl').textContent=c}
+$('#q').oninput=routes;routes();show(1);
+$('#cfg').innerHTML=[['Dense model','BAAI/bge-m3'],['Sparse model','Qdrant/bm25'],['Reranker','BAAI/bge-reranker-v2-m3'],['Chunk size / overlap','400 / 50 tokens'],['Prefetch / final top-k','20 / 5'],['Qdrant collection','industrial_docs'],['Qdrant port','6333']].map(r=>`<tr><th>${r[0]}</th><td><code>${r[1]}</code></td></tr>`).join('');
+</script>
+<script>
+const T=[['Client claims a higher clearance','Server-side identity','Role and clearance come from the authenticated user on the server. Anything the browser sends about clearance is ignored.'],
+['Reading documents above clearance','Query-time filter plus recheck','Qdrant results are filtered by classification tag, then verified again after reranking, so restricted text never reaches the model.'],
+['Reading someone else\'s chat','Ownership checks','Conversations are only returned to users who are allowed to access them.'],
+['Editing audit history','Hash-linked events','Each event includes the previous hash. GET /api/v1/audit/verify walks the chain and reports where it breaks.'],
+['Data leaving the network','Egress monitor','Guarded httpx clients can log and block outbound requests. Pair it with real network controls.'],
+['Running untrusted code','Restricted sandbox','Code execution goes through a dedicated restricted endpoint.'],
+['Confident but wrong answers','Citations + human review','Every answer carries document, page, and snippet so an engineer can check the source.']];
+document.getElementById('th').innerHTML=T.map((t,i)=>`<tr data-i="${i}" style="cursor:pointer"><td>${t[0]}</td><td><b>${t[1]}</b></td></tr>`).join('');
+document.querySelectorAll('#th tr').forEach(r=>r.onclick=()=>{document.getElementById('thd').textContent=T[+r.dataset.i][2]});
+document.getElementById('send').onclick=()=>{const h=document.getElementById('host').value||'unknown',g=document.getElementById('guard').checked;document.getElementById('eg').innerHTML=g?`<span class="bad">Blocked and logged:</span> request to ${h.replace(/[<>&]/g,'')} did not leave the network.`:`<span class="bad">Guard off:</span> request to ${h.replace(/[<>&]/g,'')} would go out.`};
+</script>
+</body>
+</html>

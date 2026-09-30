@@ -1,9 +1,10 @@
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
 from app.services.audit_service import audit_service
+from app.core.auth import User, get_current_user, require_role
 
 router = APIRouter()
 
@@ -13,6 +14,14 @@ class HITLApprovalRequest(BaseModel):
     equipment_tag: str
     approved_by: str
     comments: Optional[str] = "Engineer confirmed shutdown and isolation."
+
+
+class HITLDecisionRequest(BaseModel):
+    action_id: str
+    equipment_tag: str = "N/A"
+    decided_by: str
+    decision: str
+    comments: Optional[str] = ""
 
 
 class AuditEntry(BaseModel):
@@ -43,11 +52,11 @@ class ChainVerificationResponse(BaseModel):
 
 
 @router.post("/hitl/approve", response_model=AuditEntry)
-async def approve_action(request: HITLApprovalRequest):
+async def approve_action(request: HITLApprovalRequest, current_user: User = Depends(require_role(["ADMIN", "ENGINEER"]))):
     entry_dict = audit_service.log_entry(
         event_type="HITL_APPROVAL",
-        username=request.approved_by,
-        clearance_tags=["RESTRICTED", "INTERNAL", "PUBLIC"],
+        username=current_user.username,
+        clearance_tags=current_user.clearance_tags,
         query_or_action=f"Approved Shutdown & Maintenance for {request.equipment_tag} under SOP-017",
         equipment_tag=request.equipment_tag,
         status="EXECUTED",
@@ -55,15 +64,38 @@ async def approve_action(request: HITLApprovalRequest):
     # Create copy for response without mutating stored entry in audit_service._store
     response_data = dict(entry_dict)
     response_data["action"] = entry_dict["query_or_action"]
-    response_data["approved_by"] = request.approved_by
+    response_data["approved_by"] = current_user.username
+    return AuditEntry(**response_data)
+
+
+@router.post("/hitl/decision", response_model=AuditEntry)
+async def decide_action(request: HITLDecisionRequest, current_user: User = Depends(require_role(["ADMIN", "ENGINEER"]))):
+    decision = request.decision.strip().upper()
+    if decision not in {"APPROVED", "REJECTED", "MODIFIED"}:
+        raise HTTPException(status_code=400, detail="Decision must be APPROVED, REJECTED, or MODIFIED")
+    entry_dict = audit_service.log_entry(
+        event_type="HITL_DECISION",
+        username=current_user.username,
+        clearance_tags=current_user.clearance_tags,
+        query_or_action=f"{decision} recommendation {request.action_id} for {request.equipment_tag}. {request.comments}".strip(),
+        equipment_tag=request.equipment_tag,
+        hitl_approval_required=True,
+        status=decision,
+    )
+    response_data = dict(entry_dict)
+    response_data["action"] = entry_dict["query_or_action"]
+    response_data["approved_by"] = current_user.username
     return AuditEntry(**response_data)
 
 
 @router.get("/audit/logs", response_model=List[Dict[str, Any]])
-async def get_audit_logs():
-    return audit_service.get_logs()
+async def get_audit_logs(current_user: User = Depends(get_current_user)):
+    logs = audit_service.get_logs()
+    if current_user.role in {"ADMIN", "AUDITOR"}:
+        return logs
+    return [entry for entry in logs if entry.get("username") == current_user.username]
 
 
 @router.get("/audit/verify", response_model=ChainVerificationResponse)
-async def verify_audit_logs():
+async def verify_audit_logs(current_user: User = Depends(require_role(["ADMIN", "AUDITOR"]))):
     return audit_service.verify_audit_chain()

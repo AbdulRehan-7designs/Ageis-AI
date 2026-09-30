@@ -9,10 +9,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.main import app
 from app.core.auth import create_access_token
 from app.services.ingestion import ingestion_service
+from app.services.agent_orchestrator import _detect_evidence_conflicts
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class TestChatRBACIntegration(unittest.TestCase):
+
+    def test_conflicting_vibration_values_are_flagged(self):
+        warnings = _detect_evidence_conflicts([
+            {"snippet": "P-204 vibration measured at 4.5 mm/s."},
+            {"snippet": "P-204 vibration measured at 7.1 mm/s."},
+        ])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("4.5", warnings[0])
+        self.assertIn("7.1", warnings[0])
 
     @classmethod
     def setUpClass(cls):
@@ -53,6 +63,12 @@ class TestChatRBACIntegration(unittest.TestCase):
         
         data = response.json()
         citations = data.get("citations", [])
+        self.assertEqual(len(data.get("evidence_blocks", [])), len(citations[:5]))
+        self.assertIn("evidence_confidence", data)
+        self.assertIn(data["evidence_state"], {"grounded", "conflicting_evidence", "insufficient_evidence"})
+        self.assertFalse(data["safe_refusal"] and citations)
+        self.assertEqual(data["task_plan"]["execution_mode"], "recommendation_only")
+        self.assertEqual(data["task_plan"]["execution_guarantee"], "No operational command executed.")
         returned_tags = {c["tag"] for c in citations}
         
         # Assert PUBLIC user ONLY receives PUBLIC tags

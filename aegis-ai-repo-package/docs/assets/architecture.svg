@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" font-family="Arial,sans-serif" font-size="15">
+<rect width="900" height="380" fill="#ffffff"/>
+<rect x="10" y="10" width="120" height="360" fill="#fff4e6" stroke="#d9480f" stroke-dasharray="6 4"/><text x="70" y="34" text-anchor="middle" fill="#d9480f" font-weight="700">Untrusted</text>
+<rect x="150" y="10" width="740" height="360" fill="#eef1f4" stroke="#14212e" stroke-width="2"/><text x="520" y="34" text-anchor="middle" fill="#14212e" font-weight="700">Trusted zone (your network)</text>
+<g fill="#dfe7ee" stroke="#14212e" stroke-width="1.5">
+<rect x="20" y="165" width="100" height="50" rx="3"/><rect x="170" y="165" width="100" height="50" rx="3"/><rect x="330" y="165" width="120" height="50" rx="3" fill="#ffd8a8"/>
+<rect x="600" y="60" width="130" height="46" rx="3"/><rect x="600" y="140" width="130" height="46" rx="3"/><rect x="600" y="220" width="130" height="46" rx="3"/><rect x="600" y="300" width="130" height="46" rx="3"/></g>
+<g fill="#14212e" text-anchor="middle"><text x="70" y="195">React UI</text><text x="220" y="195">Nginx</text><text x="390" y="195" font-weight="700">FastAPI</text><text x="665" y="88">PostgreSQL</text><text x="665" y="168">Redis</text><text x="665" y="248">Qdrant</text><text x="665" y="328">Ollama</text></g>
+<g stroke="#556676" stroke-width="2" fill="none"><path d="M120 190H170M270 190H330M450 190C520 190 520 83 600 83M450 190C520 190 520 163 600 163M450 190C520 190 520 243 600 243M450 190C520 190 520 323 600 323"/></g>
+</svg>

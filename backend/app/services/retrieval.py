@@ -1,26 +1,12 @@
-"""Hybrid retrieval pipeline for the industrial RAG stack.
+"""Hybrid retrieval + citation normalization for engineering evidence."""
 
-This module performs dense + sparse retrieval from Qdrant, fuses the candidates
-with Reciprocal Rank Fusion (RRF), reranks top candidates, and returns citation-friendly payloads.
-"""
+from __future__ import annotations
 
-import logging
-from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+import re
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from fastembed import TextEmbedding
-try:
-    from fastembed import TextCrossEncoder
-except ImportError:
-    TextCrossEncoder = None
-
-from qdrant_client import QdrantClient
-from qdrant_client.models import FieldCondition, Filter, MatchAny, SparseVector
-
-from app.core.config import settings
-
-logger = logging.getLogger(__name__)
+from app.services.identifiers import extract_identifiers
 
 
 @dataclass
@@ -31,185 +17,185 @@ class RetrievalResult:
     section_title: str
     classification_tag: str
     text: str
-    rerank_score: Optional[float] = None
+    stored_filename: Optional[str] = None
+    bbox: Optional[List[float]] = None
+    page_width: Optional[int] = None
+    page_height: Optional[int] = None
+    score: float = 0.0
+    rerank_score: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class RetrievalService:
-    """Dense + sparse retrieval with RRF fusion and reranking."""
+    """Thin utility service that fuses retrieval lanes and normalizes citations."""
 
-    DENSE_MODEL = settings.DENSE_EMBEDDING_MODEL
-    SPARSE_MODEL = settings.SPARSE_EMBEDDING_MODEL
-    RERANKER_MODEL = settings.RERANKER_MODEL
-    COLLECTION_NAME = settings.QDRANT_COLLECTION
-    TOP_K_PREFETCH = settings.TOP_K_PREFETCH
-    TOP_K_FINAL = settings.TOP_K_RETRIEVE
+    @staticmethod
+    def _extract_object_tag(text: str) -> str:
+        identifiers = extract_identifiers(text or "")
+        if not identifiers:
+            match = re.search(r"\b[A-Z]{1,8}-?\d{2,6}[A-Z0-9]*\b", text or "")
+            if match:
+                return match.group(0)
+            return ""
+        return identifiers[0]
 
-    def __init__(self) -> None:
-        self.qdrant_client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, check_compatibility=False)
-        self.dense_embedder = None
-        self.sparse_embedder = None
-        self.reranker = None
-
-    def _load_supported_dense_model(self):
-        try:
-            model = TextEmbedding(model_name=self.DENSE_MODEL)
-            return model
-        except Exception as exc:
-            logger.warning("Failed to initialize dense embedder '%s': %s", self.DENSE_MODEL, exc)
-            return None
-
-    def _ensure_ready(self) -> bool:
-        if self.dense_embedder is None:
-            dense_model = self._load_supported_dense_model()
-            if dense_model is None:
-                logger.warning("Dense embedding model could not be initialized.")
-                return False
-            self.dense_embedder = dense_model
-
-        if self.reranker is None and TextCrossEncoder is not None:
-            try:
-                self.reranker = TextCrossEncoder(model_name=self.RERANKER_MODEL)
-            except Exception as exc:
-                logger.warning("Reranker model could not be initialized: %s", exc)
-                self.reranker = None
-
-        return self.dense_embedder is not None
-
-    def retrieve(
-        self,
-        query: str,
-        user_clearance: Optional[List[str]] = None,
-        top_k: Optional[int] = None,
-    ) -> List[RetrievalResult]:
-        if top_k is None:
-            top_k = self.TOP_K_FINAL
-        if user_clearance is None:
-            user_clearance = ["INTERNAL"]
-
-        logger.info("Retrieving docs for query: '%s'", query)
-        logger.info("User clearance: %s", user_clearance)
-
-        if not self._ensure_ready():
-            logger.warning("Dense embedding model is unavailable; returning no results.")
-            return []
-
-        query_dense = self._embed_query_dense(query)
-        query_sparse = self._embed_query_sparse(query)
-
-        rbac_filter = Filter(
-            must=[
-                FieldCondition(
-                    key="classification_tag",
-                    match=MatchAny(any=user_clearance),
-                )
-            ]
+    @staticmethod
+    def _is_drawing_document(doc_name: str, text: str = "") -> bool:
+        name_lowered = (doc_name or "").lower()
+        text_lowered = (text or "").lower()
+        name_markers = ("pid", "p&id", "pandid", "isometric", "line_list", "line-list")
+        text_markers = ("process and instrumentation", "isometric drawing", "line list", "sheet no")
+        repeated_pid_signal = text_lowered.count("p&id") >= 3 and "sheet" in text_lowered
+        if any(marker in name_lowered for marker in name_markers) or any(marker in text_lowered for marker in text_markers) or repeated_pid_signal:
+            return True
+        return bool(
+            re.search(
+                r"(?:^|[\_/\-])(?:pid|p&id|pandid)[^\n]*\.(?:pdf|png|jpg)",
+                name_lowered,
+            )
         )
 
-        dense_hits = self._search_qdrant(query_dense, rbac_filter, self.TOP_K_PREFETCH, vector_name="dense")
-        sparse_hits = self._search_qdrant(query_sparse, rbac_filter, self.TOP_K_PREFETCH, vector_name="sparse") if query_sparse else []
+    @staticmethod
+    def _rrf_fusion(dense_results: Sequence[Any], sparse_results: Sequence[Any], recent_results: Optional[Sequence[Any]] = None) -> List[RetrievalResult]:
+        ranked: Dict[str, Dict[str, Any]] = {}
 
-        candidates = self._rrf_fusion(dense_hits, sparse_hits)
-        reranked = self._rerank_results(candidates, query)
-        return reranked[:top_k]
+        def add_ranked(items: Iterable[Any], k: float = 60.0) -> None:
+            for idx, item in enumerate(items or []):
+                if isinstance(item, dict):
+                    result = item.get("result")
+                    chunk_id = str(item.get("chunk_id") or getattr(result, "chunk_id", ""))
+                else:
+                    result = item
+                    chunk_id = getattr(result, "chunk_id", "")
+                if not chunk_id:
+                    continue
+                entry = ranked.setdefault(chunk_id, {"result": result, "score": 0.0})
+                entry["score"] += 1.0 / (k + idx + 1)
 
-    def _embed_query_dense(self, query: str) -> List[float]:
-        embeddings = list(self.dense_embedder.embed([query]))
-        return embeddings[0].tolist()
+        add_ranked(dense_results, 60.0)
+        add_ranked(sparse_results, 60.0)
+        add_ranked(recent_results or [], 10.0)
 
-    def _embed_query_sparse(self, query: str) -> Optional[Dict[str, Any]]:
-        return None
+        ordered = sorted(ranked.values(), key=lambda item: item["score"], reverse=True)
+        return [entry["result"] for entry in ordered]
 
-    def _rrf_fusion(
-        self,
-        dense_hits: List[Dict[str, Any]],
-        sparse_hits: List[Dict[str, Any]],
-    ) -> List[RetrievalResult]:
-        candidate_scores: Dict[str, float] = defaultdict(float)
-        candidates: Dict[str, RetrievalResult] = {}
+    def retrieve(self, query: str, user_clearance: Optional[Sequence[str]] = None, top_k: int = 5) -> List[RetrievalResult]:
+        """Compatibility adapter for container smoke tests and local callers."""
+        from app.services.rag_service import rag_service
 
-        for rank, item in enumerate(dense_hits, start=1):
-            score = 1.0 / (60 + rank)
-            candidate_scores[item["chunk_id"]] += score
-            candidates[item["chunk_id"]] = item["result"]
-
-        for rank, item in enumerate(sparse_hits, start=1):
-            score = 1.0 / (60 + rank)
-            candidate_scores[item["chunk_id"]] += score
-            candidates[item["chunk_id"]] = item["result"]
-
-        merged = sorted(candidates.items(), key=lambda item: candidate_scores[item[0]], reverse=True)
-        return [result for _, result in merged[: self.TOP_K_PREFETCH]]
-
-    def _search_qdrant(
-        self,
-        query_vector: Any,
-        query_filter: Filter,
-        limit: int,
-        vector_name: str = "dense",
-    ) -> List[Dict[str, Any]]:
-        try:
-            query = query_vector
-            if isinstance(query_vector, dict) and "indices" in query_vector:
-                query = SparseVector(indices=query_vector["indices"], values=query_vector["values"])
-
-            response = self.qdrant_client.query_points(
-                collection_name=self.COLLECTION_NAME,
-                query=query,
-                using=vector_name,
-                query_filter=query_filter,
-                limit=limit,
-                with_payload=True,
-                with_vectors=False,
+        context = rag_service.build_rag_context(
+            query=query,
+            user_clearance=user_clearance,
+            top_k=top_k,
+        )
+        results: List[RetrievalResult] = []
+        for index, citation in enumerate(context.get("citations", [])):
+            location = citation.get("location") or {}
+            results.append(
+                RetrievalResult(
+                    chunk_id=str(citation.get("chunk_id") or f"citation_{index + 1}"),
+                    doc_name=str(citation.get("document_name") or citation.get("document") or "unknown.pdf"),
+                    page=int(citation.get("page") or location.get("page") or 1),
+                    section_title=str(citation.get("section_title") or "Introduction"),
+                    classification_tag=str(citation.get("classification_tag") or citation.get("tag") or "INTERNAL"),
+                    text=str(citation.get("snippet") or ""),
+                    stored_filename=citation.get("stored_filename"),
+                    bbox=citation.get("bbox"),
+                    page_width=citation.get("page_width"),
+                    page_height=citation.get("page_height"),
+                    score=float(max(0.0, 1.0 - (index * 0.05))),
+                    rerank_score=float(max(0.0, 1.0 - (index * 0.05))),
+                    metadata=dict(citation),
+                )
             )
-            hits = response.points
-        except Exception as exc:
-            logger.warning("Qdrant query_points failed for vector '%s': %s", vector_name, exc)
-            return []
-
-        results: List[Dict[str, Any]] = []
-        for hit in hits:
-            payload = hit.payload or {}
-            result = RetrievalResult(
-                chunk_id=str(payload.get("chunk_id", "unknown")),
-                doc_name=str(payload.get("doc_name", "")),
-                page=int(payload.get("page", 0) or 0),
-                section_title=str(payload.get("section_title", "")),
-                classification_tag=str(payload.get("classification_tag", "INTERNAL")),
-                text=str(payload.get("text", "")),
-            )
-            results.append({"chunk_id": result.chunk_id, "result": result})
         return results
 
-    def _rerank_results(self, results: List[RetrievalResult], query: str) -> List[RetrievalResult]:
-        if not results:
-            return []
-        if self.reranker is None:
-            logger.info("Reranker unavailable; keeping results in RRF order.")
-            return results
-
-        try:
-            documents = [result.text for result in results]
-            scores = list(self.reranker.rerank(query, documents))
-            for result, score in zip(results, scores):
-                result.rerank_score = float(score)
-            return sorted(results, key=lambda item: item.rerank_score or 0.0, reverse=True)
-        except Exception as exc:
-            logger.warning("Rerank failed: %s", exc)
-            return results
-
-    def to_citation_dicts(self, results: List[RetrievalResult]) -> List[Dict[str, Any]]:
+    def to_citation_dicts(self, results: Sequence[RetrievalResult]) -> List[Dict[str, Any]]:
         citations: List[Dict[str, Any]] = []
-        for result in results:
-            citations.append(
-                {
-                    "document": result.doc_name,
-                    "page": result.page,
-                    "section_title": result.section_title or "General",
-                    "tag": result.classification_tag,
-                    "snippet": result.text[:500],
+        for result in results or []:
+            doc_name = result.doc_name or ""
+            text = result.text or ""
+            drawing = self._is_drawing_document(doc_name, text)
+            text_tags = extract_identifiers(text)
+            metadata_tags = result.metadata.get("equipment_tags", []) if result.metadata else []
+            all_tags: List[str] = []
+            for tag in [*text_tags, *metadata_tags]:
+                normalized_tag = self._extract_object_tag(str(tag))
+                if normalized_tag and normalized_tag not in all_tags:
+                    all_tags.append(normalized_tag)
+            object_tag = all_tags[0] if all_tags else self._extract_object_tag(doc_name)
+            sheet = result.page if drawing else None
+            location = {"page": result.page}
+            if drawing:
+                location = {"page": result.page, "sheet": sheet or 1}
+            geometry = {"type": "bbox"}
+            if result.bbox and len(result.bbox) >= 4:
+                x0, y0, x1, y1 = result.bbox
+                geometry = {
+                    "type": "bbox",
+                    "x": float(x0),
+                    "y": float(y0),
+                    "width": float(max(0.0, x1 - x0)),
+                    "height": float(max(0.0, y1 - y0)),
                 }
-            )
+
+            citation = {
+                "chunk_id": result.chunk_id,
+                "document": doc_name,
+                "document_name": doc_name,
+                "document_type": "engineering_drawing" if drawing else "technical_document",
+                "drawing_type": "P&ID" if drawing else None,
+                "sheet": sheet,
+                "object_tag": object_tag,
+                "target": {"type": "equipment", "tag": object_tag},
+                "geometry": geometry,
+                "location": location,
+                "classification_tag": result.classification_tag,
+                "tag": result.classification_tag,
+                "page": result.page,
+                "section_title": result.section_title,
+                "snippet": text,
+                "stored_filename": result.stored_filename,
+                "document_id": result.metadata.get("document_id"),
+                "bbox": result.bbox,
+                "page_width": result.page_width,
+                "page_height": result.page_height,
+                "asset_lineage": {
+                    "equipment_tag": object_tag,
+                    "equipment_tags": all_tags or ([object_tag] if object_tag else []),
+                    "related_tags": [tag for tag in all_tags if tag != object_tag],
+                    "document_type": "engineering_drawing" if drawing else "technical_document",
+                    "drawing_type": "P&ID" if drawing else None,
+                    "sheet": sheet,
+                    "page": result.page,
+                    "document_name": doc_name,
+                    "target_type": "equipment" if drawing else "text",
+                    "source_kind": "drawing_sheet" if drawing else "technical_excerpt",
+                },
+                "source": {
+                    "document_name": doc_name,
+                    "page": result.page,
+                    "section_title": result.section_title,
+                    "source_type": result.metadata.get("source_type", "TEXT"),
+                    "extraction_method": result.metadata.get("extraction_method", "pymupdf"),
+                    "content_hash": result.metadata.get("content_hash"),
+                },
+                "source_type": result.metadata.get("source_type", "TEXT"),
+                "extraction_method": result.metadata.get("extraction_method", "pymupdf"),
+                "engineering_tags": result.metadata.get("engineering_tags", []),
+            }
+
+            if not drawing:
+                citation["sheet"] = None
+                citation["drawing_type"] = None
+                citation["target"] = {"type": "text", "tag": object_tag or "SOURCE"}
+                citation["location"] = {"page": result.page}
+
+            citations.append(citation)
+
         return citations
 
 
 retrieval_service = RetrievalService()
+
+__all__ = ["RetrievalResult", "RetrievalService", "retrieval_service"]
