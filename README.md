@@ -10,8 +10,15 @@ It combines a React workspace, FastAPI services, PostgreSQL persistence, Qdrant 
 [![Frontend](https://img.shields.io/badge/frontend-react%20%2B%20vite-646CFF)](#technology-stack)
 [![Deployment](https://img.shields.io/badge/deployment-docker%20compose-2496ED)](#deployment)
 
+![Aegis AI landing page](docs/screenshots/landing-page.png)
+
+**Project documentation:** [Demo walkthrough checklist](docs/DEMO_GUIDE.md) · [RAG evaluation plan](docs/EVALUATION_PLAN.md)
+
+> **Current evidence status:** The demo guide is a recording checklist, not a hosted demo. RAG benchmark scores have not yet been measured; see the evaluation plan for the reproducible protocol.
+
 ## Contents
 
+- [Project documentation](#project-documentation)
 - [Why Aegis AI](#why-aegis-ai)
 - [Capabilities](#capabilities)
 - [System architecture](#system-architecture)
@@ -25,6 +32,11 @@ It combines a React workspace, FastAPI services, PostgreSQL persistence, Qdrant 
 - [API surface](#api-surface)
 - [Development and validation](#development-and-validation)
 - [Operational notes and limitations](#operational-notes-and-limitations)
+
+## Project documentation
+
+- **[Demo walkthrough](docs/DEMO_GUIDE.md):** a 3–4 minute recording checklist with safety and verification notes. It is not a link to an existing demo video.
+- **[RAG evaluation plan](docs/EVALUATION_PLAN.md):** a test-set design, retrieval configurations, quality metrics, and release gate. Results remain unmeasured until the protocol is run.
 
 ## Why Aegis AI
 
